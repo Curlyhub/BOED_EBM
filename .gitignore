@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# Large experiment outputs (keep summaries and plots, skip raw checkpoints)
+outputs/**/seed_*/
+outputs/**/*.pt
+outputs/**/*.pth
