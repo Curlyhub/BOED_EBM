@@ -47,6 +47,16 @@ except ImportError:
     _JOBLIB_AVAILABLE = False
 
 from boedx.env import BeliefConfig, GenericBankBOEDEnv, GenericTrainConfig
+from boedx.homeostatic import (
+    HomeostaticConfig,
+    HomeostaticStats,
+    build_homeostatic_admissibility,
+    config_to_dict,
+    enforce_homeostatic_admissibility,
+    get_homeostatic_feature_spec,
+    masked_discrete_sample,
+    update_budget_after_action,
+)
 from boedx.models import (
     ApsiHead,
     CachedFilterBackbone,
@@ -62,11 +72,13 @@ from boedx.models import (
     TanhGaussianActor,
 )
 from boedx.state import (
+    append_homeo_features,
     belief_feature_dim,
     belief_features_from_probs,
     build_base_state,
     build_minimal_state,
     build_raw_history_state,
+    get_homeo_features_from_batch,
     history_logits_from_batch,
     make_raw_state,
     posterior_probs_from_energy,
@@ -293,6 +305,8 @@ class SingleStateTensorBuffer:
             "posterior_logits": self.posterior_logits,
             "filter_logits": self.filter_logits,
         }
+        if "homeo_features" in raw:
+            batch["homeo_features"] = torch.tensor(raw["homeo_features"][None], dtype=torch.float32, device=self.device)
         if need_probs:
             self.posterior[0].copy_(
                 torch.from_numpy(raw["posterior"]).to(self.device)
@@ -356,10 +370,13 @@ def compute_state_from_batch_nes(
     actions = batch["actions"]
     obs = batch["obs"]
 
+    homeo_features = get_homeo_features_from_batch(batch, actions.device, prefix="")
+
     if variant == "blau_approx":
         raw_state = build_raw_history_state(
             actions, obs, t_idx, env.get_horizon(), last_obs, aux_state
         )
+        raw_state = append_homeo_features(raw_state, homeo_features)
         return raw_state, raw_state, None, None
 
     selected_logits = history_logits_from_batch(variant, batch, "")
@@ -369,10 +386,10 @@ def compute_state_from_batch_nes(
     )
 
     if variant in {"control_filter_exact", "control_posterior_exact"}:
-        return quotient_base, hist_feat, None, None
+        return append_homeo_features(quotient_base, homeo_features), hist_feat, None, None
 
     if energy_net is None or apsi_head is None or belief_cfg.mode == "exact":
-        return quotient_base, hist_feat, None, None
+        return append_homeo_features(quotient_base, homeo_features), hist_feat, None, None
 
     energy = energy_net(hist_feat, env.hypothesis_bank)
     A = apsi_head(hist_feat)
@@ -411,6 +428,7 @@ def compute_state_from_batch_nes(
     else:
         from boedx.utils import sanitize as _sanitize
         state = _sanitize(base_state, 1e3)
+    state = append_homeo_features(state, homeo_features)
     return state, hist_feat, energy, A
 
 
@@ -489,12 +507,14 @@ def _build_policy_modules(
     train_cfg: GenericTrainConfig,
     device: torch.device,
     belief_cfg: Optional[BeliefConfig] = None,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> Tuple[CachedFilterBackbone, nn.Module, Optional[nn.Module], Optional[nn.Module]]:
     """Build (filter_backbone, actor, energy_net, apsi_head) — no Q-critics."""
     belief_cfg = belief_cfg or BeliefConfig()
     filter_backbone = CachedFilterBackbone().to(device)
     hist_dim = env.H
     aux_dim = int(env.current_aux_state().shape[0])
+    homeo_feature_dim, homeo_feature_names = get_homeostatic_feature_spec(env, homeostatic_cfg)
     quotient_base_dim = hist_dim + 1 + 1 + aux_dim
     raw_history_dim = env.get_horizon() * env.action_dim + env.get_horizon() + 1 + 1 + aux_dim
     minimal_base_dim = 1 + 1 + aux_dim
@@ -529,18 +549,18 @@ def _build_policy_modules(
 
     actor_family, _, _, _ = _actor_hparams_for_variant(variant, train_cfg)
     if variant == "blau_approx":
-        state_dim = raw_history_dim
+        state_dim = raw_history_dim + homeo_feature_dim
     elif variant_uses_ebm(variant) and actor_family == "transformer":
         # Transformer actor prepends the full raw history then adds base + belief
         base_no_path = (
             minimal_base_dim if belief_cfg.mode == "learned_only" and belief_dim > 0
             else quotient_base_dim
         )
-        state_dim = raw_history_dim + base_no_path + belief_dim
+        state_dim = raw_history_dim + base_no_path + belief_dim + homeo_feature_dim
     elif belief_cfg.mode == "learned_only" and belief_dim > 0:
-        state_dim = minimal_base_dim + belief_dim
+        state_dim = minimal_base_dim + belief_dim + homeo_feature_dim
     else:
-        state_dim = quotient_base_dim + belief_dim
+        state_dim = quotient_base_dim + belief_dim + homeo_feature_dim
     base_dim_for_actor = (
         minimal_base_dim if belief_cfg.mode == "learned_only" and belief_dim > 0
         else quotient_base_dim
@@ -558,6 +578,8 @@ def _build_policy_modules(
             belief_dim=belief_dim, action_dim=env.action_dim,
             train_cfg=train_cfg, device=device,
         )
+    actor.homeo_feature_dim = homeo_feature_dim
+    actor.homeo_feature_names = homeo_feature_names
     return filter_backbone, actor, energy_net, apsi_head
 
 
@@ -695,6 +717,8 @@ def _episode_rollout(
     deterministic: bool = False,
     collect_raw_states: bool = False,
     episode_seed: Optional[int] = None,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
+    homeo_stats: Optional[HomeostaticStats] = None,
 ) -> Tuple[float, List[Dict]]:
     """Run one episode and return (total_return, list_of_raw_states).
 
@@ -708,6 +732,7 @@ def _episode_rollout(
     """
     if episode_seed is not None:
         set_seed(int(episode_seed))
+    homeostatic_cfg = homeostatic_cfg or HomeostaticConfig()
     env = env_factory(device)
     action_scale = env.action_scale
     action_bias = env.action_bias
@@ -727,17 +752,32 @@ def _episode_rollout(
         single = SingleStateTensorBuffer(env, device)
         done = False
         total_return = 0.0
+        homeo_budget = homeostatic_cfg.initial_budget
         while not done:
             if collect_raw_states:
                 raw_states.append(dict(raw))
+            homeo_adm = build_homeostatic_admissibility(
+                env=env, raw_state=raw, cfg=homeostatic_cfg,
+                budget=homeo_budget, prev_action=env.last_action,
+            )
+            if homeo_adm.features is not None:
+                raw["homeo_features"] = homeo_adm.features.astype(np.float32)
             batch = single.update(raw, need_probs=False)
-            state_t, _, _, _ = compute_state_from_batch_nes(
+            state_t, _, energy_t, _ = compute_state_from_batch_nes(
                 variant, filter_backbone, batch, env, energy_net, apsi_head,
                 belief_cfg=belief_cfg,
             )
             time_frac = batch["t_idx"].float() / float(max(env.get_horizon(), 1))
             with torch.no_grad():
-                if discrete_action_values is not None:
+                if discrete_action_values is not None and homeostatic_cfg.enabled and homeo_adm.action_mask is not None:
+                    if homeo_adm.action_mask.any():
+                        act, _, det, _, _ = masked_discrete_sample(
+                            actor, state_t, discrete_action_values, homeo_adm.action_mask, deterministic=deterministic
+                        )
+                    else:
+                        idx = int(homeo_adm.diagnostics.get("fallback_index") or 0)
+                        act = det = discrete_action_values[idx:idx + 1]
+                elif discrete_action_values is not None:
                     act, _, det = actor.sample(
                         state_t, action_values=discrete_action_values, time_frac=time_frac
                     )
@@ -748,6 +788,14 @@ def _episode_rollout(
                     )
             chosen = det if deterministic else act
             action = chosen.squeeze(0).detach().cpu().numpy().astype(np.float32)
+            action, homeo_diag = enforce_homeostatic_admissibility(action, homeo_adm, homeostatic_cfg)
+            if discrete_action_values is not None and homeostatic_cfg.enabled and homeo_adm.action_mask is not None:
+                homeo_diag["masked_policy_used"] = True
+            if homeo_stats is not None:
+                homeo_stats.add(homeo_diag)
+            homeo_budget = update_budget_after_action(
+                homeo_budget, homeostatic_cfg, env.last_action, action
+            )
             _, reward, done, _ = env.step(action)
             raw = _make_raw_state_nes(env, need_probs=need_probs)
             total_return += float(reward)
@@ -755,6 +803,7 @@ def _episode_rollout(
         for m, mode in zip(modules, prev_modes):
             m.train(mode)
     return total_return, raw_states
+
 
 
 def _make_raw_state_nes(env: GenericBankBOEDEnv, need_probs: bool = False) -> Dict:
@@ -831,27 +880,46 @@ def _collect_random_raw_states(
     env_factory: Callable[[torch.device], GenericBankBOEDEnv],
     device: torch.device,
     n_episodes: int,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> List[Dict]:
     """Collect state snapshots from random-policy rollouts for EBM pre-training."""
     collected: List[Dict] = []
+    homeostatic_cfg = homeostatic_cfg or HomeostaticConfig()
     if n_episodes <= 0:
         return collected
     env = env_factory(device)
     for _ in range(n_episodes):
         env.reset()
         done = False
+        homeo_budget = homeostatic_cfg.initial_budget
         while not done:
             raw = _make_raw_state_nes(env, need_probs=True)
             collected.append(raw)
+            homeo_adm = build_homeostatic_admissibility(
+                env=env, raw_state=raw, cfg=homeostatic_cfg,
+                budget=homeo_budget, prev_action=env.last_action,
+            )
+            if homeo_adm.features is not None:
+                raw["homeo_features"] = homeo_adm.features.astype(np.float32)
             if uses_discrete_actor(env):
                 vals = get_discrete_action_values(env, device)
-                idx = np.random.randint(0, vals.shape[0])
+                mask = homeo_adm.action_mask
+                if homeostatic_cfg.enabled and mask is not None and mask.any():
+                    idx = int(np.random.choice(np.where(mask)[0]))
+                elif homeostatic_cfg.enabled and mask is not None and not mask.any():
+                    idx = int(homeo_adm.diagnostics.get("fallback_index") or 0)
+                else:
+                    idx = np.random.randint(0, vals.shape[0])
                 action = vals[idx].detach().cpu().numpy().astype(np.float32)
             else:
                 action = np.random.uniform(
                     env.action_low.detach().cpu().numpy(),
                     env.action_high.detach().cpu().numpy(),
                 ).astype(np.float32)
+            action, _ = enforce_homeostatic_admissibility(action, homeo_adm, homeostatic_cfg)
+            homeo_budget = update_budget_after_action(
+                homeo_budget, homeostatic_cfg, env.last_action, action
+            )
             _, _, done, _ = env.step(action)
     return collected
 
@@ -960,6 +1028,7 @@ def evaluate_modules_nes(
     belief_cfg: Optional[BeliefConfig] = None,
     n_eval_episodes: Optional[int] = None,
     collect_paths: bool = True,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> Dict[str, object]:
     """Evaluate the NES policy and EBM over multiple episodes.
 
@@ -969,6 +1038,7 @@ def evaluate_modules_nes(
       ``paths``            — per-step path arrays (only when collect_paths=True).
     """
     belief_cfg = belief_cfg or BeliefConfig()
+    homeostatic_cfg = homeostatic_cfg or HomeostaticConfig()
     n_eval = int(n_eval_episodes if n_eval_episodes is not None else train_cfg.eval_episodes)
     env = env_factory(device)
     modules = [m for m in [filter_backbone, actor, energy_net, apsi_head] if m is not None]
@@ -995,9 +1065,15 @@ def evaluate_modules_nes(
     spce_paths: List[List[float]] = []
     snmc_paths: List[List[float]] = []
 
+    belief_snapshot: Optional[Dict] = None
+    eval_homeo_stats = HomeostaticStats(enabled=homeostatic_cfg.enabled)
     try:
         for _ in range(n_eval):
             env.reset()
+            if belief_snapshot is None:
+                _snap_prior = torch.exp(
+                    F.log_softmax(env.prior_bank_logits, dim=0)
+                ).detach().cpu().numpy().astype(np.float64)
             need_probs = energy_net is not None
             raw = _make_raw_state_nes(env, need_probs=need_probs)
             single = SingleStateTensorBuffer(env, device)
@@ -1007,8 +1083,15 @@ def evaluate_modules_nes(
             ep_filter_bank_path: List[float] = []
             ep_spce_path: List[float] = []
             ep_snmc_path: List[float] = []
+            homeo_budget = homeostatic_cfg.initial_budget
 
             while not done:
+                homeo_adm = build_homeostatic_admissibility(
+                    env=env, raw_state=raw, cfg=homeostatic_cfg,
+                    budget=homeo_budget, prev_action=env.last_action,
+                )
+                if homeo_adm.features is not None:
+                    raw["homeo_features"] = homeo_adm.features.astype(np.float32)
                 batch = single.update(raw, need_probs=need_probs)
                 state_t, _, energy_t, _ = compute_state_from_batch_nes(
                     variant, filter_backbone, batch, env, energy_net, apsi_head,
@@ -1056,15 +1139,31 @@ def evaluate_modules_nes(
                 time_frac = batch["t_idx"].float() / float(max(env.get_horizon(), 1))
                 if uses_discrete_actor(env):
                     action_values = get_discrete_action_values(env, device)
-                    _, _, det = actor.sample(
-                        state_t, action_values=action_values, time_frac=time_frac
-                    )
+                    if homeostatic_cfg.enabled and homeo_adm.action_mask is not None:
+                        if homeo_adm.action_mask.any():
+                            _, _, det, _, _ = masked_discrete_sample(
+                                actor, state_t, action_values, homeo_adm.action_mask, deterministic=True
+                            )
+                        else:
+                            idx = int(homeo_adm.diagnostics.get("fallback_index") or 0)
+                            det = action_values[idx:idx + 1]
+                    else:
+                        _, _, det = actor.sample(
+                            state_t, action_values=action_values, time_frac=time_frac
+                        )
                 else:
                     _, _, det = actor.sample(
                         state_t, action_scale=env.action_scale,
                         action_bias=env.action_bias, time_frac=time_frac,
                     )
                 action = det.squeeze(0).detach().cpu().numpy().astype(np.float32)
+                action, homeo_diag = enforce_homeostatic_admissibility(action, homeo_adm, homeostatic_cfg)
+                if uses_discrete_actor(env) and homeostatic_cfg.enabled and homeo_adm.action_mask is not None:
+                    homeo_diag["masked_policy_used"] = True
+                eval_homeo_stats.add(homeo_diag)
+                homeo_budget = update_budget_after_action(
+                    homeo_budget, homeostatic_cfg, env.last_action, action
+                )
                 _, reward, done, _ = env.step(action)
                 raw = _make_raw_state_nes(env, need_probs=need_probs)
                 ep_return += reward
@@ -1085,6 +1184,14 @@ def evaluate_modules_nes(
                             env, prefix_actions, prefix_obs, env.theta0, snmc_L
                         )
                     )
+            if belief_snapshot is None:
+                _snap_post = env.posterior_bank().detach().cpu().numpy().astype(np.float64)
+                belief_snapshot = {
+                    "prior": _snap_prior.tolist(),
+                    "posterior": _snap_post.tolist(),
+                    "true_theta": env.theta0.tolist(),
+                    "bank": env.hypothesis_bank.detach().cpu().numpy().tolist(),
+                }
             eval_returns.append(ep_return)
             bank_ig_finals.append(ep_bank_path[-1])
             filter_bank_ig_finals.append(ep_filter_bank_path[-1])
@@ -1108,6 +1215,7 @@ def evaluate_modules_nes(
         "avg_filter_bank_ig": float(np.mean(filter_bank_ig_finals)),
         "avg_spce_lower": float(np.mean(spce_lower_finals)),
     }
+    eval_dict.update(eval_homeo_stats.summary())
     if snmc_L > 0 and snmc_upper_finals:
         eval_dict["avg_snmc_style_upper"] = float(np.mean(snmc_upper_finals))
     out: Dict[str, object] = {"eval": eval_dict}
@@ -1134,6 +1242,7 @@ def evaluate_modules_nes(
                 np.array(snmc_paths, dtype=np.float64), axis=0
             ).tolist()
         out["paths"] = paths
+    out["belief_snapshot"] = belief_snapshot
     return out
 
 
@@ -1162,6 +1271,7 @@ def _candidate_return_from_flat(
     stochastic: bool,
     rollout_episodes: int,
     episode_seeds: Optional[Sequence[int]] = None,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> float:
     """Evaluate a candidate parameter vector by rolling out fresh episodes.
 
@@ -1171,7 +1281,7 @@ def _candidate_return_from_flat(
     device = torch.device(device_str)
     env = env_factory(device)
     filter_backbone, actor, energy_net, apsi_head = _build_policy_modules(
-        variant, env, train_cfg, device, belief_cfg=belief_cfg
+        variant, env, train_cfg, device, belief_cfg=belief_cfg, homeostatic_cfg=homeostatic_cfg
     )
     _load_module_state(filter_backbone, filter_state)
     _load_module_state(actor, actor_state)
@@ -1186,6 +1296,7 @@ def _candidate_return_from_flat(
             variant, env_factory, filter_backbone, actor, energy_net, apsi_head, device,
             belief_cfg=belief_cfg, deterministic=not stochastic,
             collect_raw_states=False, episode_seed=ep_seed,
+            homeostatic_cfg=homeostatic_cfg,
         )
         vals.append(ret)
     return float(np.mean(vals))
@@ -1205,6 +1316,7 @@ def train_one_seed_nes(
     spce_L: int,
     snmc_L: int,
     belief_cfg: Optional[BeliefConfig] = None,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> Dict:
     """Run the NES optimisation loop for one (variant, seed) pair.
 
@@ -1212,6 +1324,7 @@ def train_one_seed_nes(
     returns the result dict.
     """
     set_seed(seed)
+    homeostatic_cfg = homeostatic_cfg or HomeostaticConfig()
     device = torch.device(
         nes_cfg.device
         if nes_cfg.device != "auto"
@@ -1219,12 +1332,14 @@ def train_one_seed_nes(
     )
     env = env_factory(device)
     filter_backbone, actor, energy_net, apsi_head = _build_policy_modules(
-        variant, env, train_cfg, device, belief_cfg=belief_cfg
+        variant, env, train_cfg, device, belief_cfg=belief_cfg, homeostatic_cfg=homeostatic_cfg
     )
 
     # EBM pre-training from random rollouts
     if energy_net is not None and apsi_head is not None and not _ebm_is_frozen(nes_cfg, None):
-        pre_states = _collect_random_raw_states(env_factory, device, nes_cfg.ebm_pretrain_episodes)
+        pre_states = _collect_random_raw_states(
+            env_factory, device, nes_cfg.ebm_pretrain_episodes, homeostatic_cfg
+        )
         if pre_states:
             pre_cfg = NESConfig(**{k: v for k, v in nes_cfg.__dict__.items()})
             if nes_cfg.ebm_pretrain_updates > 0:
@@ -1284,6 +1399,7 @@ def train_one_seed_nes(
             actor=actor, energy_net=energy_net, apsi_head=apsi_head, device=device,
             train_cfg=train_cfg, spce_L=spce_L, snmc_L=snmc_L, belief_cfg=belief_cfg,
             n_eval_episodes=nes_cfg.selection_eval_episodes, collect_paths=False,
+            homeostatic_cfg=homeostatic_cfg,
         )
         preview = preview_bundle["eval"]
         preview_diag = preview_bundle.get("cross_diagnostics")
@@ -1351,6 +1467,7 @@ def train_one_seed_nes(
                     str(device), belief_cfg, filter_state, actor_state,
                     energy_state, apsi_state, True,
                     nes_cfg.rollout_episodes_per_candidate, candidate_episode_seeds,
+                    homeostatic_cfg,
                 )
                 for flat in candidates
             )
@@ -1369,6 +1486,7 @@ def train_one_seed_nes(
                         variant, env_factory, filter_backbone, actor,
                         energy_net, apsi_head, device, belief_cfg=belief_cfg,
                         deterministic=False, collect_raw_states=False, episode_seed=ep_seed,
+                        homeostatic_cfg=homeostatic_cfg,
                     )
                     vals.append(ret)
                 fitness[i] = float(np.mean(vals))
@@ -1399,6 +1517,7 @@ def train_one_seed_nes(
                             train_cfg, str(device), belief_cfg, filter_state,
                             actor_state, energy_state, apsi_state, True,
                             nes_cfg.reevaluate_top_episodes, reeval_seeds,
+                            homeostatic_cfg,
                         )
                         for i in top_idx
                     )
@@ -1415,7 +1534,7 @@ def train_one_seed_nes(
                                 variant, env_factory, filter_backbone, actor,
                                 energy_net, apsi_head, device, belief_cfg=belief_cfg,
                                 deterministic=False, collect_raw_states=False,
-                                episode_seed=ep_seed,
+                                episode_seed=ep_seed, homeostatic_cfg=homeostatic_cfg,
                             )
                             vals.append(ret)
                         fitness[i] = float(np.mean(vals))
@@ -1446,7 +1565,7 @@ def train_one_seed_nes(
                 mu.detach().cpu().numpy(), variant, env_factory, train_cfg, str(device),
                 belief_cfg, filter_state, actor_state, energy_state, apsi_state,
                 False, max(1, nes_cfg.rollout_episodes_per_candidate),
-                candidate_episode_seeds,
+                candidate_episode_seeds, homeostatic_cfg,
             )
             success = float(np.mean(fitness > center_fit))
             sigma_offset += nes_cfg.sigma_adapt_rate * (success - nes_cfg.sigma_success_target)
@@ -1474,7 +1593,7 @@ def train_one_seed_nes(
                 _, states = _episode_rollout(
                     variant, env_factory, filter_backbone, actor, energy_net, apsi_head,
                     device, belief_cfg=belief_cfg, deterministic=False,
-                    collect_raw_states=True,
+                    collect_raw_states=True, homeostatic_cfg=homeostatic_cfg,
                 )
                 collected.extend(states)
             _supervised_update_ebm(
@@ -1496,6 +1615,7 @@ def train_one_seed_nes(
         actor=actor, energy_net=energy_net, apsi_head=apsi_head, device=device,
         train_cfg=train_cfg, spce_L=spce_L, snmc_L=snmc_L, belief_cfg=belief_cfg,
         n_eval_episodes=nes_cfg.eval_episodes, collect_paths=False,
+        homeostatic_cfg=homeostatic_cfg,
     )
 
     # Re-evaluate all top-K candidates with more episodes for final selection
@@ -1511,6 +1631,7 @@ def train_one_seed_nes(
                 actor=actor, energy_net=energy_net, apsi_head=apsi_head, device=device,
                 train_cfg=train_cfg, spce_L=spce_L, snmc_L=snmc_L, belief_cfg=belief_cfg,
                 n_eval_episodes=final_eval_eps, collect_paths=False,
+                homeostatic_cfg=homeostatic_cfg,
             )
             final_eval = final_bundle["eval"]
             final_diag = final_bundle.get("cross_diagnostics")
@@ -1544,6 +1665,7 @@ def train_one_seed_nes(
         actor=actor, energy_net=energy_net, apsi_head=apsi_head, device=device,
         train_cfg=train_cfg, spce_L=spce_L, snmc_L=snmc_L, belief_cfg=belief_cfg,
         n_eval_episodes=nes_cfg.eval_episodes, collect_paths=True,
+        homeostatic_cfg=homeostatic_cfg,
     )
 
     out: Dict[str, object] = {
@@ -1556,6 +1678,10 @@ def train_one_seed_nes(
         "eval_last": last_eval_bundle["eval"],
         "cross_diagnostics": selected_bundle.get("cross_diagnostics"),
         "cross_diagnostics_last": last_eval_bundle.get("cross_diagnostics"),
+        "state_info": {
+            "homeo_feature_dim": int(getattr(actor, "homeo_feature_dim", 0)),
+            "homeo_feature_names": list(getattr(actor, "homeo_feature_names", [])),
+        },
         "selection": {
             "best_generation": int(best_generation if best_generation > 0 else nes_cfg.generations),
             "best_score": float(
@@ -1583,6 +1709,7 @@ def train_one_seed_nes(
         },
         "variant": variant,
         "seed": seed,
+        "belief_snapshot": selected_bundle.get("belief_snapshot"),
         "paths": selected_bundle["paths"],
     }
     seed_dir = os.path.join(output_dir, variant, f"seed_{seed}")
@@ -1607,6 +1734,7 @@ def run_experiment_suite_nes(
     spce_L: int,
     snmc_L: int,
     belief_cfg: Optional[BeliefConfig] = None,
+    homeostatic_cfg: Optional[HomeostaticConfig] = None,
 ) -> Dict:
     """Run all (variant × seed) combinations and write summary JSON.
 
@@ -1639,7 +1767,7 @@ def run_experiment_suite_nes(
             variant_results.append(
                 train_one_seed_nes(
                     variant, env_factory, train_cfg, nes_cfg, seed, output_dir,
-                    spce_L, snmc_L, belief_cfg=belief_cfg,
+                    spce_L, snmc_L, belief_cfg=belief_cfg, homeostatic_cfg=homeostatic_cfg,
                 )
             )
         all_results[variant] = variant_results
@@ -1649,6 +1777,32 @@ def run_experiment_suite_nes(
     tracked_fields = [
         "avg_return", "avg_bank_ig", "avg_filter_bank_ig",
         "avg_spce_lower", "avg_snmc_style_upper",
+        "homeo_enabled", "homeo_was_filtered", "homeo_raw_action_feasible",
+        "homeo_num_feasible_candidates", "homeo_rejection_rate",
+        "homeo_mean_raw_filtered_distance", "homeo_mean_risk_prob",
+        "homeo_mean_movement_cost", "homeo_budget_exhaustion_rate",
+        "homeo_violation_rate", "homeo_admissibility_built_before_policy_state",
+        "homeo_num_admissible_actions", "homeo_no_admissible_action_rate",
+        "homeo_least_violating_fallback_rate", "homeo_masked_policy_rate",
+        "homeo_projection_rate", "homeo_mean_selected_extinction_prob",
+        "homeo_mean_raw_extinction_prob", "homeo_mean_selected_explosion_prob",
+        "homeo_mean_raw_explosion_prob", "homeo_mean_selected_survival_fraction_risk",
+        "homeo_mean_raw_survival_fraction_risk", "homeo_mean_selected_consumption_fraction_risk",
+        "homeo_mean_raw_consumption_fraction_risk", "homeo_mean_selected_mean_survival_fraction",
+        "homeo_mean_selected_mean_consumption_fraction", "homeo_min_survival_fraction_risk",
+        "homeo_mean_survival_fraction_risk", "homeo_min_consumption_fraction_risk",
+        "homeo_mean_consumption_fraction_risk", "homeo_mean_survival_fraction_admissible",
+        "homeo_mean_consumption_fraction_admissible", "homeo_feature_dim",
+        "homeo_features_enabled", "homeo_mean_num_admissible_norm",
+        "homeo_mean_min_admissible_action_norm", "homeo_mean_max_admissible_action_norm",
+        "homeo_mean_mean_admissible_action_norm", "homeo_mean_std_admissible_action_norm",
+        "homeo_mean_mean_extinction_prob_adm", "homeo_mean_mean_survival_risk_adm",
+        "homeo_min_extinction_prob_all", "homeo_mean_extinction_prob_all",
+        "homeo_mean_min_survival_risk_all", "homeo_mean_mean_survival_risk_all",
+        "fallback_min_extinction_prob", "fallback_mean_extinction_prob",
+        "fallback_min_survival_fraction_risk", "fallback_mean_survival_fraction_risk",
+        "fallback_min_consumption_fraction_risk", "fallback_mean_consumption_fraction_risk",
+        "fallback_min_violation_score",
     ]
     cross_diag_fields = [
         "avg_actor_belief_feature_mae", "avg_actor_belief_prob_l1",
@@ -1709,6 +1863,8 @@ def run_experiment_suite_nes(
             "modal_top_k": belief_cfg.modal_top_k,
             "include_raw_history_for_ebm_actor": belief_cfg.include_raw_history_for_ebm_actor,
         }
+    if homeostatic_cfg is not None:
+        summary["homeostatic_config"] = config_to_dict(homeostatic_cfg)
     summary["nes_config"] = {
         "generations": nes_cfg.generations,
         "population_size": nes_cfg.population_size,
@@ -1749,6 +1905,10 @@ def run_experiment_suite_nes(
 
     with open(os.path.join(output_dir, "summary_multi_seed.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
+
+    from boedx.plotting import save_standard_plots
+    save_standard_plots(output_dir, all_results, summary, sample_env.get_horizon())
+
     print("\n=== Multi-seed NES summary ===")
     print(json.dumps(summary, indent=2))
     return summary

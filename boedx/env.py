@@ -71,16 +71,22 @@ class GenericTrainConfig:
     selection_every: int = 100
     selection_start_episode: int = 100
     selection_return_weight: float = 1.0
+    selection_bank_ig_weight: float = 0.0
+    selection_spce_weight: float = 0.0
+    selection_survival_risk_weight: float = 0.0
+    selection_fallback_weight: float = 0.0
     selection_belief_kl_weight: float = 0.10
-    selection_belief_map_weight: float = 0.25
     selection_belief_mean_weight: float = 0.50
+    selection_belief_map_weight: float = 0.25
     # Actor regularisation — applies to the actor only (not EBM / critic)
     actor_weight_decay: float = 0.0
     actor_dropout: float = 0.0
     # Policy family shared by all variants for a fair comparison
-    # "gaussian"     — single-Gaussian SAC actor (historical default)
-    # "mog"          — mixture-of-Gaussians actor (more expressive, default)
-    # "transformer"  — NES-only path-aware Transformer actor
+    # "gaussian"        — single-Gaussian SAC actor (historical default)
+    # "mog"             — mixture-of-Gaussians actor (more expressive)
+    # "categorical"     — discrete categorical actor (prey-population default)
+    # "categorical_moe" — discrete mixture-of-experts categorical actor
+    # "transformer"     — NES-only path-aware Transformer actor
     actor_family: str = "gaussian"
     actor_mixture_components: int = 4
 

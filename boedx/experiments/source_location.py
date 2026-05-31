@@ -46,6 +46,7 @@ import numpy as np
 import torch
 
 from boedx.env import BeliefConfig, GenericBankBOEDEnv, GenericTrainConfig
+from boedx.homeostatic import HomeostaticConfig
 from boedx.trainer import run_experiment_suite
 from boedx.utils import gaussian_logpdf
 
@@ -341,6 +342,27 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--move-cost-coef",     type=float, default=1.0)
     p.add_argument("--probe-cost",         type=float, default=0.35)
     p.add_argument("--budget-violation-penalty", type=float, default=-2.0)
+    p.add_argument("--homeo-enabled", action="store_true")
+    p.add_argument("--homeo-include-features", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--homeo-feature-mode", type=str, default="basic", choices=["basic", "none"])
+    p.add_argument("--homeo-mode", type=str, default="none",
+                   choices=["none", "source_location", "prey_population"])
+    p.add_argument("--homeo-projection-mode", type=str, default="nearest",
+                   choices=["nearest"])
+    p.add_argument("--homeo-max-projection-candidates", type=int, default=256)
+    p.add_argument("--homeo-max-step-norm", type=float, default=None)
+    p.add_argument("--homeo-danger-radius", type=float, default=None)
+    p.add_argument("--homeo-danger-prob-max", type=float, default=None)
+    p.add_argument("--homeo-risk-source", type=str, default="posterior",
+                   choices=["posterior", "ebm_ablation"])
+    p.add_argument("--homeo-prey-min", type=float, default=None)
+    p.add_argument("--homeo-prey-max", type=float, default=None)
+    p.add_argument("--homeo-predator-max", type=float, default=None)
+    p.add_argument("--homeo-extinction-prob-max", type=float, default=None)
+    p.add_argument("--homeo-explosion-prob-max", type=float, default=None)
+    p.add_argument("--homeo-initial-budget", type=float, default=None)
+    p.add_argument("--homeo-obs-cost", type=float, default=0.0)
+    p.add_argument("--homeo-movement-cost", type=float, default=0.0)
     return p.parse_args()
 
 
@@ -407,6 +429,27 @@ def main() -> None:
         beta_power=args.beta_power,
     )
 
+    homeostatic_cfg = HomeostaticConfig(
+        enabled=args.homeo_enabled,
+        mode=args.homeo_mode,
+        include_features=args.homeo_include_features,
+        feature_mode=args.homeo_feature_mode,
+        projection_mode=args.homeo_projection_mode,
+        max_projection_candidates=args.homeo_max_projection_candidates,
+        max_step_norm=args.homeo_max_step_norm,
+        danger_radius=args.homeo_danger_radius,
+        danger_prob_max=args.homeo_danger_prob_max,
+        risk_source=args.homeo_risk_source,
+        prey_min=args.homeo_prey_min,
+        prey_max=args.homeo_prey_max,
+        predator_max=args.homeo_predator_max,
+        extinction_prob_max=args.homeo_extinction_prob_max,
+        explosion_prob_max=args.homeo_explosion_prob_max,
+        initial_budget=args.homeo_initial_budget,
+        obs_cost=args.homeo_obs_cost,
+        movement_cost=args.homeo_movement_cost,
+    )
+
     def factory(dev: torch.device) -> SourceLocalization2DEnv:
         return SourceLocalization2DEnv(cfg=cfg, device=dev)
 
@@ -420,6 +463,7 @@ def main() -> None:
         spce_L=args.spce_L,
         snmc_L=args.snmc_L,
         belief_cfg=belief_cfg,
+        homeostatic_cfg=homeostatic_cfg,
     )
     summary["config"] = vars(args)
     with open(os.path.join(args.output_dir, "run_config_and_summary.json"), "w", encoding="utf-8") as f:

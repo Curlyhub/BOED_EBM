@@ -846,6 +846,315 @@ def _plot_combined_overview(
 
 
 # ---------------------------------------------------------------------------
+# Prior vs Posterior belief charts
+# ---------------------------------------------------------------------------
+
+def _source_marginal(snap: Dict) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Marginalise source-location posterior to source-1 position on a G×G grid.
+
+    Returns (unique_x, unique_y, prior_grid, post_grid, true_theta).
+    prior_grid and post_grid are (G, G) arrays where grid[i, j] is the
+    probability mass at position (unique_x[i], unique_y[j]).
+    """
+    bank = np.array(snap["bank"], dtype=np.float64)   # (H, 4)
+    prior = np.array(snap["prior"], dtype=np.float64)  # (H,)
+    post = np.array(snap["posterior"], dtype=np.float64)  # (H,)
+    true_th = np.array(snap["true_theta"], dtype=np.float64)  # (4,)
+    s1 = bank[:, 0:2]
+    ux = np.sort(np.unique(np.round(s1[:, 0], 6)))
+    uy = np.sort(np.unique(np.round(s1[:, 1], 6)))
+    G = len(ux)
+    pg = np.zeros((G, G))
+    qg = np.zeros((G, G))
+    for i, xi in enumerate(ux):
+        for j, yj in enumerate(uy):
+            m = np.isclose(s1[:, 0], xi) & np.isclose(s1[:, 1], yj)
+            pg[i, j] = prior[m].sum()
+            qg[i, j] = post[m].sum()
+    return ux, uy, pg, qg, true_th
+
+
+def _source_heatmap(
+    ax: "plt.Axes",
+    grid: np.ndarray,
+    ux: np.ndarray,
+    uy: np.ndarray,
+    true_s1: np.ndarray,
+    title: str,
+    vmax: Optional[float] = None,
+) -> "plt.cm.ScalarMappable":
+    """Render a G×G marginal probability grid as an imshow heatmap."""
+    dx = float(ux[1] - ux[0]) if len(ux) > 1 else 1.0
+    dy = float(uy[1] - uy[0]) if len(uy) > 1 else 1.0
+    extent = [
+        float(ux[0]) - dx / 2, float(ux[-1]) + dx / 2,
+        float(uy[0]) - dy / 2, float(uy[-1]) + dy / 2,
+    ]
+    im = ax.imshow(
+        grid.T, origin="lower", extent=extent,
+        aspect="equal", cmap="Blues",
+        vmin=0.0, vmax=float(vmax) if vmax else float(grid.max()) or 1e-12,
+        interpolation="nearest",
+    )
+    ax.scatter(
+        [float(true_s1[0])], [float(true_s1[1])],
+        marker="*", s=200, color="#CC2200", zorder=6,
+        edgecolors="white", linewidths=0.6,
+    )
+    ax.set_title(title, fontsize=10, pad=4)
+    ax.set_xlabel("Source 1  $x$", fontsize=9)
+    ax.set_ylabel("Source 1  $y$", fontsize=9)
+    _grid(ax)
+    return im
+
+
+def _prey_scatter(
+    ax: "plt.Axes",
+    bank: np.ndarray,
+    probs: np.ndarray,
+    true_theta: np.ndarray,
+    title: str,
+    vmax: Optional[float] = None,
+) -> "plt.cm.ScalarMappable":
+    """Scatter of bank atoms colour-coded by probability mass."""
+    _vmax = float(vmax) if vmax else float(np.array(probs).max()) or 1e-12
+    sc = ax.scatter(
+        bank[:, 0], bank[:, 1],
+        c=probs, s=28, cmap="Blues",
+        vmin=0.0, vmax=_vmax,
+        alpha=0.85, edgecolors="none",
+    )
+    ax.scatter(
+        [float(true_theta[0])], [float(true_theta[1])],
+        marker="*", s=220, color="#CC2200", zorder=6,
+        edgecolors="white", linewidths=0.6,
+    )
+    ax.set_title(title, fontsize=10, pad=4)
+    ax.set_xlabel(r"$\log a$", fontsize=9)
+    ax.set_ylabel(r"$\log T_h$", fontsize=9)
+    _grid(ax)
+    return sc
+
+
+def _weighted_kde_1d(
+    atoms: np.ndarray,
+    weights: np.ndarray,
+    x_grid: np.ndarray,
+) -> np.ndarray:
+    """Gaussian weighted KDE on a 1-D grid (Scott's bandwidth)."""
+    weights = np.asarray(weights, dtype=np.float64)
+    weights = weights / weights.sum()
+    mean_w = float(np.dot(weights, atoms))
+    var_w = float(np.dot(weights, (atoms - mean_w) ** 2))
+    std_w = float(np.sqrt(max(var_w, 1e-8)))
+    n_eff = 1.0 / float(np.dot(weights, weights))
+    h = 1.06 * std_w * max(n_eff, 1.0) ** (-0.2)
+    h = max(h, 1e-4)
+    density = np.zeros_like(x_grid, dtype=np.float64)
+    for xi, wi in zip(atoms, weights):
+        density += wi * np.exp(-0.5 * ((x_grid - xi) / h) ** 2) / (h * np.sqrt(2.0 * np.pi))
+    return density
+
+
+def _prey_kde_figure(
+    snap: Dict,
+    variant_name: str,
+    save_path: str,
+) -> None:
+    """1-D marginal KDE line chart for prey-population prior vs posterior.
+
+    Shows two panels (one per parameter dimension: log a, log Th).
+    Prior and posterior are drawn as filled line curves; the true theta
+    is marked with a vertical dashed line in each panel.
+    """
+    _apply_paper_style()
+    bank = np.array(snap["bank"], dtype=np.float64)     # (H, 2)
+    prior = np.array(snap["prior"], dtype=np.float64)   # (H,)
+    post = np.array(snap["posterior"], dtype=np.float64)  # (H,)
+    true_th = np.array(snap["true_theta"], dtype=np.float64)  # (2,)
+
+    param_labels = [r"$\log a$", r"$\log T_h$"]
+    prior_color = "#8B9BB5"
+    post_color = _color(variant_name)
+
+    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.8), constrained_layout=True)
+
+    for d, (ax, plabel) in enumerate(zip(axes, param_labels)):
+        atoms = bank[:, d]
+        pad = 0.5 * (atoms.max() - atoms.min() + 1e-3)
+        x_grid = np.linspace(atoms.min() - pad, atoms.max() + pad, 400)
+
+        prior_kde = _weighted_kde_1d(atoms, prior, x_grid)
+        post_kde = _weighted_kde_1d(atoms, post, x_grid)
+
+        ax.plot(x_grid, prior_kde, color=prior_color, linewidth=1.6,
+                linestyle="--", label="Prior")
+        ax.fill_between(x_grid, prior_kde, color=prior_color, alpha=0.18)
+
+        ax.plot(x_grid, post_kde, color=post_color, linewidth=1.8,
+                label=f"Posterior — {_dname(variant_name)}")
+        ax.fill_between(x_grid, post_kde, color=post_color, alpha=0.22)
+
+        ax.axvline(float(true_th[d]), color="#CC2200", linewidth=1.2,
+                   linestyle=":", label=r"True $\theta$", zorder=5)
+
+        ax.set_xlabel(plabel)
+        ax.set_ylabel("Marginal density")
+        ax.set_title(f"Marginal prior/posterior — {plabel}", pad=5, fontsize=10)
+        _grid(ax)
+        ax.legend(frameon=True, framealpha=0.92, edgecolor="#cccccc", fontsize=8)
+
+    fig.suptitle(
+        f"Prior → Posterior (1-D marginals) — {_dname(variant_name)}",
+        fontsize=11,
+    )
+    _save(fig, save_path)
+
+
+def _plot_prior_vs_posterior(
+    all_results: Dict[str, List[Dict]],
+    ordered_variants: List[str],
+    save_path_prefix: str,
+) -> None:
+    """Generate prior → posterior charts for every variant and a 3-panel comparison.
+
+    Per-variant figures (Prior | Posterior) are saved as
+    ``<save_path_prefix>_<variant>.{png,pdf}``.
+    The combined comparison (Prior | baseline posterior | best-variant posterior)
+    is saved as ``<save_path_prefix>_comparison.{png,pdf}``.
+
+    Source-location environments (theta_dim=4) are shown as 7×7 marginal heatmaps
+    over source-1 position.  Prey-population environments (theta_dim=2) are shown
+    as 2-D scatter plots of the bank atoms coloured by probability mass.
+    """
+    _apply_paper_style()
+
+    # Collect one snapshot per variant (first seed that has one)
+    snaps: Dict[str, Dict] = {}
+    for v in ordered_variants:
+        for r in all_results.get(v, []):
+            snap = r.get("belief_snapshot")
+            if snap is not None:
+                snaps[v] = snap
+                break
+    if not snaps:
+        return
+
+    first_snap = next(iter(snaps.values()))
+    theta_dim = np.array(first_snap["bank"]).shape[1]
+    is_source = (theta_dim == 4)
+
+    # ── Per-variant figure: [Prior | Posterior] ────────────────────────────
+    for v, snap in snaps.items():
+        fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.8), constrained_layout=True)
+        slug = v.replace(" ", "_").replace("/", "_")
+
+        if is_source:
+            ux, uy, pg, qg, true_th = _source_marginal(snap)
+            vmax = max(float(pg.max()), float(qg.max())) or 1e-12
+            _source_heatmap(axes[0], pg, ux, uy, true_th[:2],
+                            r"Prior  $p(\theta_1)$", vmax=vmax)
+            im = _source_heatmap(axes[1], qg, ux, uy, true_th[:2],
+                                  r"Posterior  $p(\theta_1 \mid y_{1:T})$", vmax=vmax)
+            fig.colorbar(im, ax=axes[1], shrink=0.80, label="Marginal probability")
+        else:
+            bk = np.array(snap["bank"], dtype=np.float64)
+            pr = np.array(snap["prior"], dtype=np.float64)
+            po = np.array(snap["posterior"], dtype=np.float64)
+            tt = np.array(snap["true_theta"], dtype=np.float64)
+            vmax = max(float(pr.max()), float(po.max())) or 1e-12
+            _prey_scatter(axes[0], bk, pr, tt, r"Prior  $p(\theta)$", vmax=vmax)
+            im = _prey_scatter(axes[1], bk, po, tt,
+                               r"Posterior  $p(\theta \mid y_{1:T})$", vmax=vmax)
+            fig.colorbar(im, ax=axes[1], shrink=0.80, label="Probability")
+            # Additional KDE marginal line plot
+            _prey_kde_figure(snap, v, f"{save_path_prefix}_kde_{slug}")
+
+        axes[0].scatter([], [], marker="*", s=130, color="#CC2200", label="True $\\theta$")
+        axes[0].legend(fontsize=8, frameon=True, framealpha=0.90)
+        fig.suptitle(f"Prior → Posterior — {_dname(v)}", fontsize=11)
+        _save(fig, f"{save_path_prefix}_{slug}")
+
+    # ── Combined 3-panel comparison: Prior | blau posterior | best posterior ─
+    baseline = "blau_approx"
+    non_baseline = [v for v in ordered_variants if v != baseline and v in snaps]
+    if non_baseline and baseline in snaps:
+        best = non_baseline[-1]
+        snap_b = snaps[baseline]
+        snap_n = snaps[best]
+
+        fig, axes = plt.subplots(1, 3, figsize=(13.5, 3.8), constrained_layout=True)
+
+        if is_source:
+            ux_b, uy_b, pg_b, qg_b, true_b = _source_marginal(snap_b)
+            ux_n, uy_n, _,    qg_n, true_n = _source_marginal(snap_n)
+            vmax = max(float(pg_b.max()), float(qg_b.max()), float(qg_n.max())) or 1e-12
+            _source_heatmap(axes[0], pg_b, ux_b, uy_b, true_b[:2],
+                            r"Prior  $p(\theta_1)$", vmax=vmax)
+            _source_heatmap(axes[1], qg_b, ux_b, uy_b, true_b[:2],
+                            f"Posterior — {_dname(baseline)}", vmax=vmax)
+            im = _source_heatmap(axes[2], qg_n, ux_n, uy_n, true_n[:2],
+                                  f"Posterior — {_dname(best)}", vmax=vmax)
+            fig.colorbar(im, ax=axes[2], shrink=0.80, label="Marginal probability")
+        else:
+            bk_b = np.array(snap_b["bank"], dtype=np.float64)
+            bk_n = np.array(snap_n["bank"], dtype=np.float64)
+            pr_b = np.array(snap_b["prior"], dtype=np.float64)
+            po_b = np.array(snap_b["posterior"], dtype=np.float64)
+            po_n = np.array(snap_n["posterior"], dtype=np.float64)
+            tt_b = np.array(snap_b["true_theta"], dtype=np.float64)
+            tt_n = np.array(snap_n["true_theta"], dtype=np.float64)
+            vmax = max(float(po_b.max()), float(po_n.max())) or 1e-12
+            _prey_scatter(axes[0], bk_b, pr_b, tt_b, r"Prior  $p(\theta)$")
+            _prey_scatter(axes[1], bk_b, po_b, tt_b,
+                          f"Posterior — {_dname(baseline)}", vmax=vmax)
+            im = _prey_scatter(axes[2], bk_n, po_n, tt_n,
+                               f"Posterior — {_dname(best)}", vmax=vmax)
+            fig.colorbar(im, ax=axes[2], shrink=0.80, label="Probability")
+            # KDE comparison: one plot per parameter dimension
+            for d, plabel in enumerate([r"$\log a$", r"$\log T_h$"]):
+                slug_b = baseline.replace(" ", "_").replace("/", "_")
+                slug_n = best.replace(" ", "_").replace("/", "_")
+                fig_kde, ax_kde = plt.subplots(figsize=(7.0, 3.8))
+                atoms = bk_b[:, d]
+                pad = 0.5 * (atoms.max() - atoms.min() + 1e-3)
+                x_grid = np.linspace(atoms.min() - pad, atoms.max() + pad, 400)
+                prior_kde = _weighted_kde_1d(atoms, pr_b, x_grid)
+                post_b_kde = _weighted_kde_1d(atoms, po_b, x_grid)
+                post_n_kde = _weighted_kde_1d(bk_n[:, d], po_n, x_grid)
+                ax_kde.plot(x_grid, prior_kde, color="#8B9BB5", linewidth=1.5,
+                            linestyle="--", label="Prior")
+                ax_kde.fill_between(x_grid, prior_kde, color="#8B9BB5", alpha=0.13)
+                ax_kde.plot(x_grid, post_b_kde, color=_color(baseline),
+                            linewidth=1.6, label=f"Posterior — {_dname(baseline)}")
+                ax_kde.fill_between(x_grid, post_b_kde, color=_color(baseline), alpha=0.18)
+                ax_kde.plot(x_grid, post_n_kde, color=_color(best),
+                            linewidth=1.6, label=f"Posterior — {_dname(best)}")
+                ax_kde.fill_between(x_grid, post_n_kde, color=_color(best), alpha=0.18)
+                ax_kde.axvline(float(tt_b[d]), color="#CC2200", linewidth=1.1,
+                               linestyle=":", label=r"True $\theta$")
+                ax_kde.set_xlabel(plabel)
+                ax_kde.set_ylabel("Marginal density")
+                ax_kde.set_title(
+                    f"Prior vs Posterior marginals — {plabel}", pad=5, fontsize=10
+                )
+                _grid(ax_kde)
+                ax_kde.legend(frameon=True, framealpha=0.92, edgecolor="#cccccc", fontsize=8)
+                fig_kde.tight_layout()
+                dim_tag = "loga" if d == 0 else "logTh"
+                _save(fig_kde, f"{save_path_prefix}_kde_comparison_{dim_tag}")
+
+        for ax in axes:
+            ax.scatter([], [], marker="*", s=130, color="#CC2200", label="True $\\theta$")
+            ax.legend(fontsize=8, frameon=True, framealpha=0.90)
+        fig.suptitle(
+            "Prior → Posterior: Baseline vs. Informative Design Policy",
+            fontsize=11,
+        )
+        _save(fig, f"{save_path_prefix}_comparison")
+
+
+# ---------------------------------------------------------------------------
 # Standard plots (lightweight, called by run_experiment_suite)
 # ---------------------------------------------------------------------------
 
@@ -1010,6 +1319,12 @@ def save_standard_plots(
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, "return_vs_spce_scatter.png"), dpi=220)
         plt.close()
+
+    # Prior vs Posterior belief charts
+    _plot_prior_vs_posterior(
+        all_results, ordered_variants,
+        save_path_prefix=os.path.join(output_dir, "prior_vs_posterior"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1218,6 +1533,12 @@ def generate_scientific_plots(
     _plot_combined_overview(
         plot_data, summary, ordered_variants,
         save_path=gp(graph_dir, "overview_combined"), horizon=horizon,
+    )
+
+    # 11. Prior vs Posterior belief charts
+    _plot_prior_vs_posterior(
+        all_results, ordered_variants,
+        save_path_prefix=gp(graph_dir, "prior_vs_posterior"),
     )
 
     n_files = len(os.listdir(graph_dir))

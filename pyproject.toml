@@ -26,3 +26,9 @@ boedx-plot                = "boedx.plotting:_cli_generate_plots"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["boedx*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:.*deprecated.*:pyparsing.exceptions.PyparsingDeprecationWarning:matplotlib\\.",
+    "ignore:.*deprecated.*:pyparsing.exceptions.PyparsingDeprecationWarning:pyparsing\\.util",
+]

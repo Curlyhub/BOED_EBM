@@ -13,7 +13,7 @@ Layer 4 – policy actors
            Continuous (SAC + NES): TanhGaussianActor, MixtureTanhGaussianActor
            NES-only:  SequenceTransformerTanhGaussianActor,
                       DualBranchMixtureTanhGaussianActor
-           Discrete:  DiscreteCategoricalActor
+           Discrete:  DiscreteCategoricalActor, DiscreteMoECategoricalActor
 Layer 5 – Q-critics (QCritic)
 """
 
@@ -1050,6 +1050,60 @@ class DiscreteCategoricalActor(nn.Module):
         log_prob = dist.log_prob(idx).unsqueeze(-1)
         action = action_values[idx]
         deterministic = action_values[torch.argmax(logits, dim=-1)]
+        return action, log_prob, deterministic
+
+
+class DiscreteMoECategoricalActor(nn.Module):
+    """Mixture-of-experts categorical actor for discrete action spaces."""
+
+    def __init__(
+        self, state_dim: int, num_actions: int, hidden: int = 256, n_experts: int = 4
+    ):
+        super().__init__()
+        self.num_actions = int(num_actions)
+        self.n_experts = int(n_experts)
+        if self.n_experts < 1:
+            raise ValueError("DiscreteMoECategoricalActor requires n_experts >= 1.")
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden), nn.ReLU(),
+            nn.Linear(hidden, hidden), nn.ReLU(),
+        )
+        self.expert_logits_head = nn.Linear(hidden, self.n_experts * self.num_actions)
+        self.gate_logits_head = nn.Linear(hidden, self.n_experts)
+
+    def _mixture_log_probs(self, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        hidden = sanitize(self.net(state), 100.0)
+        expert_logits = sanitize(
+            self.expert_logits_head(hidden).view(-1, self.n_experts, self.num_actions), 20.0
+        )
+        gate_logits = sanitize(self.gate_logits_head(hidden), 20.0)
+        expert_log_probs = F.log_softmax(expert_logits, dim=-1)
+        gate_log_probs = F.log_softmax(gate_logits, dim=-1)
+        log_probs = torch.logsumexp(
+            gate_log_probs.unsqueeze(-1) + expert_log_probs, dim=1
+        )
+        return torch.exp(log_probs), log_probs
+
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        _, log_probs = self._mixture_log_probs(state)
+        return log_probs
+
+    def probs_and_log_probs(
+        self, state: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self._mixture_log_probs(state)
+
+    def sample(
+        self,
+        state: torch.Tensor,
+        action_values: torch.Tensor,
+        time_frac: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        probs, log_probs = self.probs_and_log_probs(state)
+        idx = torch.distributions.Categorical(probs=probs).sample()
+        log_prob = log_probs.gather(-1, idx.unsqueeze(-1))
+        action = action_values[idx]
+        deterministic = action_values[torch.argmax(log_probs, dim=-1)]
         return action, log_prob, deterministic
 
 

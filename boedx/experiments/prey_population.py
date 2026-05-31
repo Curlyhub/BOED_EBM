@@ -44,7 +44,7 @@ Discrete action space
 ---------------------
 The design is an integer initial prey count d_t ∈ {1, …, 300}.
 This environment flags ``name == "prey_population"`` so the trainer
-automatically selects a ``DiscreteCategoricalActor`` instead of the
+automatically selects a discrete categorical actor instead of the
 continuous SAC actor used for source-localisation.
 """
 
@@ -60,6 +60,7 @@ import numpy as np
 import torch
 
 from boedx.env import BeliefConfig, GenericBankBOEDEnv, GenericTrainConfig
+from boedx.homeostatic import HomeostaticConfig
 from boedx.trainer import run_experiment_suite
 
 
@@ -100,7 +101,7 @@ class PreyPopulationEnv(GenericBankBOEDEnv):
 
     Because the action is a 1-D integer, the trainer dispatch logic in
     ``boedx.trainer.uses_discrete_actor`` automatically selects a
-    ``DiscreteCategoricalActor`` over {design_min, …, design_max}.
+    discrete categorical policy over {design_min, …, design_max}.
     """
 
     name = "prey_population"
@@ -231,6 +232,43 @@ class PreyPopulationEnv(GenericBankBOEDEnv):
         pT = ((N0 - NT) / N0).clamp(1e-6, 1.0 - 1e-6)
         return self._binom_consumed_loglik(obs_t.expand_as(pT), N0, pT)
 
+    def predict_population_next(
+        self, thetas: np.ndarray | torch.Tensor, action: np.ndarray | torch.Tensor
+    ) -> tuple[np.ndarray, None]:
+        """Predict terminal prey population for a batch of theta particles.
+
+        The prey benchmark has no explicit predator-state variable in the
+        existing model, so the second return value is None.  The helper is
+        intentionally thin and reuses _integrate_terminal_population.
+        """
+        theta_t = torch.as_tensor(thetas, dtype=torch.float32, device=self.device)
+        action_t = torch.as_tensor(action, dtype=torch.float32, device=self.device)
+        N0 = action_t.reshape(-1)[0].expand(theta_t.shape[0])
+        NT = self._integrate_terminal_population(N0, theta_t)
+        return NT.detach().cpu().numpy().astype(np.float32), None
+
+    def predict_population_next_batch(
+        self,
+        thetas: np.ndarray | torch.Tensor,
+        actions: np.ndarray | torch.Tensor,
+    ) -> tuple[np.ndarray, None]:
+        """Predict terminal prey population for K candidate actions × P particles.
+
+        Args:
+            thetas:  (P, 2) particle array of (log_a, log_Th).
+            actions: (K,) or (K, 1) candidate initial prey counts.
+
+        Returns:
+            (K, P) numpy array of terminal prey populations, None (no predator state).
+        """
+        theta_t = torch.as_tensor(thetas, dtype=torch.float32, device=self.device)   # (P, 2)
+        acts = torch.as_tensor(actions, dtype=torch.float32, device=self.device).reshape(-1)  # (K,)
+        K, P = acts.shape[0], theta_t.shape[0]
+        N0 = acts.unsqueeze(1).expand(K, P)                    # (K, P)
+        theta_batch = theta_t.unsqueeze(0).expand(K, P, 2)    # (K, P, 2)
+        NT = self._integrate_terminal_population(N0, theta_batch)  # (K, P)
+        return NT.detach().cpu().numpy().astype(np.float32), None
+
 
 # ---------------------------------------------------------------------------
 # Variants
@@ -251,22 +289,63 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Prey-population discrete BOED benchmark."
     )
-    p.add_argument("--episodes",             type=int,   default=250)
-    p.add_argument("--eval-episodes",        type=int,   default=40)
+    p.add_argument("--episodes",             type=int,   default=3000)
+    p.add_argument("--eval-episodes",        type=int,   default=120)
     p.add_argument("--seeds",                type=str,   default="0,1,2")
     p.add_argument("--device",               type=str,   default="auto")
     p.add_argument("--output-dir",           type=str,   default="./outputs/prey_population")
     p.add_argument("--variants",             type=str,   default=",".join(VARIANTS))
-    p.add_argument("--horizon",              type=int,   default=10)
+    p.add_argument("--horizon",              type=int,   default=30)
     p.add_argument("--bank-size",            type=int,   default=512)
-    p.add_argument("--hidden-ebm",           type=int,   default=128)
-    p.add_argument("--gamma",                type=float, default=0.95)
-    p.add_argument("--spce-L",               type=int,   default=128)
-    p.add_argument("--snmc-L",               type=int,   default=128)
-    p.add_argument("--belief-mode",          type=str,   default="distilled_detached",
+    p.add_argument("--hidden-ebm",           type=int,   default=512)
+    p.add_argument("--hidden-rl",            type=int,   default=256)
+    p.add_argument("--actor-family",         type=str,   default="categorical",
+                   choices=["categorical", "categorical_moe", "gaussian", "mog"])
+    p.add_argument("--actor-mixture-components", type=int, default=4)
+    p.add_argument("--gamma",                type=float, default=1.0)
+    p.add_argument("--ebm-update-every",     type=int,   default=4)
+    p.add_argument("--spce-L",               type=int,   default=1024)
+    p.add_argument("--snmc-L",               type=int,   default=512)
+    p.add_argument("--belief-mode",          type=str,   default="learned_only",
                    choices=["exact", "distilled_detached", "distilled_e2e", "learned_only"])
-    p.add_argument("--belief-feature-mode",  type=str,   default="legacy",
+    p.add_argument("--belief-feature-mode",  type=str,   default="moments",
                    choices=["legacy", "moments"])
+    p.add_argument("--selection-start-episode", type=int, default=0)
+    p.add_argument("--selection-every", type=int, default=0)
+    p.add_argument("--selection-eval-episodes", type=int, default=0)
+    p.add_argument("--selection-return-weight", type=float, default=1.0)
+    p.add_argument("--selection-bank-ig-weight", type=float, default=0.0)
+    p.add_argument("--selection-spce-weight", type=float, default=0.0)
+    p.add_argument("--selection-survival-risk-weight", type=float, default=0.0)
+    p.add_argument("--selection-fallback-weight", type=float, default=0.0)
+    p.add_argument("--selection-belief-kl-weight", type=float, default=0.0)
+    p.add_argument("--selection-belief-mean-weight", type=float, default=0.0)
+    p.add_argument("--selection-belief-map-weight", type=float, default=0.0)
+    p.add_argument("--homeo-enabled", action="store_true")
+    p.add_argument("--homeo-include-features", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--homeo-feature-mode", type=str, default="basic", choices=["basic", "relative", "none"])
+    p.add_argument("--homeo-mode", type=str, default="none",
+                   choices=["none", "source_location", "prey_population"])
+    p.add_argument("--homeo-projection-mode", type=str, default="nearest",
+                   choices=["nearest"])
+    p.add_argument("--homeo-max-projection-candidates", type=int, default=256)
+    p.add_argument("--homeo-max-step-norm", type=float, default=None)
+    p.add_argument("--homeo-danger-radius", type=float, default=None)
+    p.add_argument("--homeo-danger-prob-max", type=float, default=None)
+    p.add_argument("--homeo-risk-source", type=str, default="posterior",
+                   choices=["posterior", "ebm_ablation"])
+    p.add_argument("--homeo-prey-min", type=float, default=None)
+    p.add_argument("--homeo-prey-max", type=float, default=None)
+    p.add_argument("--homeo-predator-max", type=float, default=None)
+    p.add_argument("--homeo-extinction-prob-max", type=float, default=None)
+    p.add_argument("--homeo-explosion-prob-max", type=float, default=None)
+    p.add_argument("--homeo-survival-fraction-min", type=float, default=None)
+    p.add_argument("--homeo-survival-fraction-prob-max", type=float, default=None)
+    p.add_argument("--homeo-consumption-fraction-max", type=float, default=None)
+    p.add_argument("--homeo-consumption-fraction-prob-max", type=float, default=None)
+    p.add_argument("--homeo-initial-budget", type=float, default=None)
+    p.add_argument("--homeo-obs-cost", type=float, default=0.0)
+    p.add_argument("--homeo-movement-cost", type=float, default=0.0)
     return p.parse_args()
 
 
@@ -283,15 +362,55 @@ def main() -> None:
         eval_episodes=args.eval_episodes,
         device=device,
         seeds=args.seeds,
+        hidden_rl=args.hidden_rl,
         hidden_ebm=args.hidden_ebm,
+        actor_family=args.actor_family,
+        actor_mixture_components=args.actor_mixture_components,
         gamma=args.gamma,
+        ebm_update_every=args.ebm_update_every,
         print_every=25,
+        selection_start_episode=args.selection_start_episode,
+        selection_every=args.selection_every,
+        selection_eval_episodes=args.selection_eval_episodes,
+        selection_return_weight=args.selection_return_weight,
+        selection_bank_ig_weight=args.selection_bank_ig_weight,
+        selection_spce_weight=args.selection_spce_weight,
+        selection_survival_risk_weight=args.selection_survival_risk_weight,
+        selection_fallback_weight=args.selection_fallback_weight,
+        selection_belief_kl_weight=args.selection_belief_kl_weight,
+        selection_belief_mean_weight=args.selection_belief_mean_weight,
+        selection_belief_map_weight=args.selection_belief_map_weight,
     )
     seeds: Sequence[int] = [int(s) for s in args.seeds.split(",") if s.strip()]
     variants = [v.strip() for v in args.variants.split(",") if v.strip()]
     belief_cfg = BeliefConfig(
         mode=args.belief_mode,
         feature_mode=args.belief_feature_mode,
+    )
+
+    homeostatic_cfg = HomeostaticConfig(
+        enabled=args.homeo_enabled,
+        mode=args.homeo_mode,
+        include_features=args.homeo_include_features,
+        feature_mode=args.homeo_feature_mode,
+        projection_mode=args.homeo_projection_mode,
+        max_projection_candidates=args.homeo_max_projection_candidates,
+        max_step_norm=args.homeo_max_step_norm,
+        danger_radius=args.homeo_danger_radius,
+        danger_prob_max=args.homeo_danger_prob_max,
+        risk_source=args.homeo_risk_source,
+        prey_min=args.homeo_prey_min,
+        prey_max=args.homeo_prey_max,
+        predator_max=args.homeo_predator_max,
+        extinction_prob_max=args.homeo_extinction_prob_max,
+        explosion_prob_max=args.homeo_explosion_prob_max,
+        survival_fraction_min=args.homeo_survival_fraction_min,
+        survival_fraction_prob_max=args.homeo_survival_fraction_prob_max,
+        consumption_fraction_max=args.homeo_consumption_fraction_max,
+        consumption_fraction_prob_max=args.homeo_consumption_fraction_prob_max,
+        initial_budget=args.homeo_initial_budget,
+        obs_cost=args.homeo_obs_cost,
+        movement_cost=args.homeo_movement_cost,
     )
 
     def factory(dev: torch.device) -> PreyPopulationEnv:
@@ -308,6 +427,7 @@ def main() -> None:
         spce_L=args.spce_L,
         snmc_L=args.snmc_L,
         belief_cfg=belief_cfg,
+        homeostatic_cfg=homeostatic_cfg,
     )
     summary["config"] = vars(args)
     with open(os.path.join(args.output_dir, "run_config_and_summary.json"), "w", encoding="utf-8") as f:

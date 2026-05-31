@@ -12,6 +12,14 @@ Public API re-exported from sub-modules for convenience::
 """
 
 from boedx.env import BeliefConfig, GenericBankBOEDEnv, GenericTrainConfig
+from boedx.homeostatic import (
+    HomeostaticAdmissibility,
+    HomeostaticConfig,
+    HomeostaticContext,
+    build_homeostatic_admissibility,
+    enforce_homeostatic_admissibility,
+    filter_action,
+)
 from boedx.nes_trainer import NESConfig, run_experiment_suite_nes, train_one_seed_nes
 from boedx.plotting import generate_scientific_plots, save_standard_plots
 from boedx.trainer import run_experiment_suite, train_one_seed
@@ -24,6 +32,12 @@ __all__ = [
     "BeliefConfig",
     "GenericBankBOEDEnv",
     "GenericTrainConfig",
+    "HomeostaticAdmissibility",
+    "HomeostaticConfig",
+    "HomeostaticContext",
+    "build_homeostatic_admissibility",
+    "enforce_homeostatic_admissibility",
+    "filter_action",
     # RL training path (SAC)
     "run_experiment_suite",
     "train_one_seed",

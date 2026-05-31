@@ -34,6 +34,30 @@ from boedx.models import CachedFilterBackbone
 from boedx.utils import sanitize
 
 
+def get_homeo_features_from_batch(
+    batch: Dict[str, torch.Tensor], device: torch.device, prefix: str = ""
+) -> torch.Tensor | None:
+    key = f"{prefix}homeo_features"
+    if key not in batch:
+        return None
+    feat = batch[key]
+    if not isinstance(feat, torch.Tensor):
+        feat = torch.tensor(feat, dtype=torch.float32, device=device)
+    else:
+        feat = feat.to(device=device, dtype=torch.float32)
+    if feat.dim() == 1:
+        feat = feat.unsqueeze(0)
+    if feat.shape[-1] == 0:
+        return None
+    return feat
+
+
+def append_homeo_features(state: torch.Tensor, homeo_features: torch.Tensor | None) -> torch.Tensor:
+    if homeo_features is None:
+        return state
+    return sanitize(torch.cat([state, homeo_features], dim=-1), 1e3)
+
+
 # ---------------------------------------------------------------------------
 # Variant classification helpers
 # ---------------------------------------------------------------------------
@@ -378,10 +402,13 @@ def compute_state_from_batch(
     actions = batch[f"{prefix}actions"]
     obs = batch[f"{prefix}obs"]
 
+    homeo_features = get_homeo_features_from_batch(batch, actions.device, prefix=prefix)
+
     if variant == "blau_approx":
         raw_state = build_raw_history_state(
             actions, obs, t_idx, env.get_horizon(), last_obs, aux_state
         )
+        raw_state = append_homeo_features(raw_state, homeo_features)
         return raw_state, raw_state, None, None
 
     selected_logits = history_logits_from_batch(variant, batch, prefix)
@@ -389,10 +416,10 @@ def compute_state_from_batch(
     quotient_base = build_base_state(hist_feat, t_idx, env.get_horizon(), last_obs, aux_state)
 
     if variant in {"control_filter_exact", "control_posterior_exact"}:
-        return quotient_base, hist_feat, None, None
+        return append_homeo_features(quotient_base, homeo_features), hist_feat, None, None
 
     if energy_net is None or apsi_head is None or belief_cfg.mode == "exact":
-        return quotient_base, hist_feat, None, None
+        return append_homeo_features(quotient_base, homeo_features), hist_feat, None, None
 
     if variant_uses_beta_contrastive(variant):
         particle_thetas = batch[f"{prefix}contrastive_thetas"]
@@ -431,6 +458,7 @@ def compute_state_from_batch(
     else:
         raise ValueError(f"Unknown belief mode: {belief_cfg.mode!r}")
 
+    state = append_homeo_features(state, homeo_features)
     return state, hist_feat, energy, A
 
 
@@ -458,6 +486,8 @@ def raw_state_to_policy_state(
         "contrastive_thetas": torch.tensor(raw_state["contrastive_thetas"][None], dtype=torch.float32, device=device),
         "contrastive_log_weights": torch.tensor(raw_state["contrastive_log_weights"][None], dtype=torch.float32, device=device),
     }
+    if "homeo_features" in raw_state:
+        batch["homeo_features"] = torch.tensor(raw_state["homeo_features"][None], dtype=torch.float32, device=device)
     return compute_state_from_batch(
         variant=variant,
         filter_backbone=filter_backbone,

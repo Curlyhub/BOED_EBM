@@ -37,3 +37,22 @@ Thumbs.db
 outputs/**/seed_*/
 outputs/**/*.pt
 outputs/**/*.pth
+
+# Untracked raw/debug/pilot output directories
+outputs/debug_*/
+outputs/pilot_*/
+outputs/prey_*/
+outputs/graph_pp_final/
+outputs/graph_prey_population_1/
+outputs/graph_sl_final/
+
+# Artifact directories
+graph_--help/
+inventory/
+
+# Draft paper text
+results_section_draft.md
+results_appendix_draft.md
+
+# Scratch files
+boedx/.tmp_write_test
