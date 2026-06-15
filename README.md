@@ -1,6 +1,6 @@
 # BOEDX
 
-BOEDX is a research codebase for Bayesian Optimal Experimental Design with expressive policies. It provides bank-based sequential BOED environments, policy-gradient and Natural Evolution Strategy trainers, EBM belief models, scientific plotting utilities, and optional homeostatic action filtering for safety or viability constraints.
+BOED-EBM is a research codebase for Bayesian Optimal Experimental Design with expressive policies. It provides bank-based sequential BOED environments, policy-gradient and Natural Evolution Strategy trainers, EBM belief models, scientific plotting utilities, and optional homeostatic action filtering for safety or viability constraints.
 
 The package is organized around reusable environment and trainer abstractions in `boedx/`, plus runnable benchmark scripts for source localization and prey-population experiments.
 
