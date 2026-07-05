@@ -1,0 +1,941 @@
+{
+  "blau_approx_avg_return": {
+    "mean": 3.8722391484850593,
+    "std": 0.0,
+    "ci95_low": 3.8722391484850593,
+    "ci95_high": 3.8722391484850593
+  },
+  "blau_approx_avg_bank_ig": {
+    "mean": 3.9144548575083413,
+    "std": 0.0,
+    "ci95_low": 3.9144548575083413,
+    "ci95_high": 3.9144548575083413
+  },
+  "blau_approx_avg_filter_bank_ig": {
+    "mean": 3.9144548575083413,
+    "std": 0.0,
+    "ci95_low": 3.9144548575083413,
+    "ci95_high": 3.9144548575083413
+  },
+  "blau_approx_avg_spce_lower": {
+    "mean": 3.9780964533487957,
+    "std": 0.0,
+    "ci95_low": 3.9780964533487957,
+    "ci95_high": 3.9780964533487957
+  },
+  "blau_approx_homeo_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_was_filtered": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_raw_action_feasible": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "blau_approx_homeo_num_feasible_candidates": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_rejection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_raw_filtered_distance": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_risk_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_movement_cost": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_budget_exhaustion_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_violation_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_admissibility_built_before_policy_state": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "blau_approx_homeo_num_admissible_actions": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_no_admissible_action_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_least_violating_fallback_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_masked_policy_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_projection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_raw_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_raw_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_raw_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_raw_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_mean_survival_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_selected_mean_consumption_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_survival_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_consumption_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_feature_dim": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_features_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_min_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_homeo_mean_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_min_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_mean_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "blau_approx_fallback_min_violation_score": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_avg_return": {
+    "mean": 4.375975561190785,
+    "std": 0.0,
+    "ci95_low": 4.375975561190785,
+    "ci95_high": 4.375975561190785
+  },
+  "control_posterior_exact_avg_bank_ig": {
+    "mean": 4.619677666823069,
+    "std": 0.0,
+    "ci95_low": 4.619677666823069,
+    "ci95_high": 4.619677666823069
+  },
+  "control_posterior_exact_avg_filter_bank_ig": {
+    "mean": 4.619677710533142,
+    "std": 0.0,
+    "ci95_low": 4.619677710533142,
+    "ci95_high": 4.619677710533142
+  },
+  "control_posterior_exact_avg_spce_lower": {
+    "mean": 4.496816794077556,
+    "std": 0.0,
+    "ci95_low": 4.496816794077556,
+    "ci95_high": 4.496816794077556
+  },
+  "control_posterior_exact_homeo_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_was_filtered": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_raw_action_feasible": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "control_posterior_exact_homeo_num_feasible_candidates": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_rejection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_raw_filtered_distance": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_risk_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_movement_cost": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_budget_exhaustion_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_violation_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_admissibility_built_before_policy_state": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "control_posterior_exact_homeo_num_admissible_actions": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_no_admissible_action_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_least_violating_fallback_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_masked_policy_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_projection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_raw_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_raw_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_raw_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_raw_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_mean_survival_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_selected_mean_consumption_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_survival_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_consumption_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_feature_dim": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_features_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_min_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_homeo_mean_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_min_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_mean_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "control_posterior_exact_fallback_min_violation_score": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_avg_return": {
+    "mean": 4.1085272665950345,
+    "std": 0.0,
+    "ci95_low": 4.1085272665950345,
+    "ci95_high": 4.1085272665950345
+  },
+  "ours_ebm_cross_posterior_avg_bank_ig": {
+    "mean": 4.468487254778544,
+    "std": 0.0,
+    "ci95_low": 4.468487254778544,
+    "ci95_high": 4.468487254778544
+  },
+  "ours_ebm_cross_posterior_avg_filter_bank_ig": {
+    "mean": 4.468487238883972,
+    "std": 0.0,
+    "ci95_low": 4.468487238883972,
+    "ci95_high": 4.468487238883972
+  },
+  "ours_ebm_cross_posterior_avg_spce_lower": {
+    "mean": 4.404857603708903,
+    "std": 0.0,
+    "ci95_low": 4.404857603708903,
+    "ci95_high": 4.404857603708903
+  },
+  "ours_ebm_cross_posterior_avg_abs_belief_mean_error": {
+    "mean": 0.049402702489169316,
+    "std": 0.0,
+    "ci95_low": 0.049402702489169316,
+    "ci95_high": 0.049402702489169316
+  },
+  "ours_ebm_cross_posterior_avg_belief_kl": {
+    "mean": 0.2670211145351641,
+    "std": 0.0,
+    "ci95_low": 0.2670211145351641,
+    "ci95_high": 0.2670211145351641
+  },
+  "ours_ebm_cross_posterior_avg_belief_l1": {
+    "mean": 0.46833161408392093,
+    "std": 0.0,
+    "ci95_low": 0.46833161408392093,
+    "ci95_high": 0.46833161408392093
+  },
+  "ours_ebm_cross_posterior_avg_belief_map_to_exact_distance": {
+    "mean": 0.40155927889049053,
+    "std": 0.0,
+    "ci95_low": 0.40155927889049053,
+    "ci95_high": 0.40155927889049053
+  },
+  "ours_ebm_cross_posterior_avg_belief_map_to_true_distance": {
+    "mean": 0.9022321591402094,
+    "std": 0.0,
+    "ci95_low": 0.9022321591402094,
+    "ci95_high": 0.9022321591402094
+  },
+  "ours_ebm_cross_posterior_homeo_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_was_filtered": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_raw_action_feasible": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "ours_ebm_cross_posterior_homeo_num_feasible_candidates": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_rejection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_raw_filtered_distance": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_risk_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_movement_cost": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_budget_exhaustion_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_violation_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_admissibility_built_before_policy_state": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci95_low": 1.0,
+    "ci95_high": 1.0
+  },
+  "ours_ebm_cross_posterior_homeo_num_admissible_actions": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_no_admissible_action_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_least_violating_fallback_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_masked_policy_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_projection_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_raw_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_raw_explosion_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_raw_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_raw_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_mean_survival_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_selected_mean_consumption_fraction": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_survival_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_consumption_fraction_admissible": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_feature_dim": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_features_enabled": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_min_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_homeo_mean_extinction_prob_all": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_min_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_mean_extinction_prob": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_min_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_mean_survival_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_min_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_mean_consumption_fraction_risk": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "ours_ebm_cross_posterior_fallback_min_violation_score": {
+    "mean": 0.0,
+    "std": 0.0,
+    "ci95_low": 0.0,
+    "ci95_high": 0.0
+  },
+  "paired_return_diff_control_posterior_exact_minus_blau_approx": {
+    "mean": 0.5037364127057256,
+    "std": 0.0,
+    "ci95_low": 0.5037364127057256,
+    "ci95_high": 0.5037364127057256,
+    "n": 1
+  },
+  "paired_return_diff_ours_ebm_cross_posterior_minus_blau_approx": {
+    "mean": 0.2362881181099752,
+    "std": 0.0,
+    "ci95_low": 0.2362881181099752,
+    "ci95_high": 0.2362881181099752,
+    "n": 1
+  },
+  "experiment_name": "dose_response",
+  "variants": [
+    "blau_approx",
+    "control_posterior_exact",
+    "ours_ebm_cross_posterior"
+  ],
+  "seeds": [
+    0
+  ],
+  "horizon": 20,
+  "spce_L": 256,
+  "snmc_L": 0,
+  "belief_config": {
+    "mode": "distilled_detached",
+    "feature_mode": "moments",
+    "ebm_architecture": "standard",
+    "n_sources": 1,
+    "source_dim": 0,
+    "add_pairwise_dist": true,
+    "modal_top_k": 4,
+    "beta_start": 0.95,
+    "beta_end": 0.05,
+    "beta_power": 1.5
+  },
+  "homeostatic_config": {
+    "enabled": false,
+    "mode": "none",
+    "include_features": true,
+    "feature_mode": "basic",
+    "projection_mode": "nearest",
+    "max_projection_candidates": 256,
+    "max_step_norm": null,
+    "danger_radius": null,
+    "danger_prob_max": null,
+    "risk_source": "posterior",
+    "use_ebm_posterior_for_risk": false,
+    "prey_min": null,
+    "prey_max": null,
+    "predator_max": null,
+    "extinction_prob_max": null,
+    "explosion_prob_max": null,
+    "survival_fraction_min": null,
+    "survival_fraction_prob_max": null,
+    "consumption_fraction_max": null,
+    "consumption_fraction_prob_max": null,
+    "initial_budget": null,
+    "obs_cost": 0.0,
+    "movement_cost": 0.0
+  }
+}

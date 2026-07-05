@@ -21,6 +21,7 @@ dev = ["pytest", "ruff"]
 boedx-source-location     = "boedx.experiments.source_location:main"
 boedx-source-location-nes = "boedx.experiments.source_location_nes:main"
 boedx-prey-population     = "boedx.experiments.prey_population:main"
+boedx-dose-response = "boedx.experiments.dose_response:main"
 boedx-plot                = "boedx.plotting:_cli_generate_plots"
 
 [tool.setuptools.packages.find]
