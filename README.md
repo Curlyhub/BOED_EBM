@@ -70,8 +70,8 @@ Run a small source-location policy-gradient experiment:
 
 ```bash
 boedx-source-location \
-  --episodes 20 \
-  --eval-episodes 5 \
+  --episodes 1200 \
+  --eval-episodes 60 \
   --seeds 0 \
   --output-dir ./outputs/source_location_smoke
 ```
@@ -92,10 +92,30 @@ Run a small prey-population experiment:
 
 ```bash
 boedx-prey-population \
-  --episodes 20 \
-  --eval-episodes 5 \
+  --episodes 1200 \
+  --eval-episodes 60 \
   --seeds 0 \
-  --output-dir ./outputs/prey_population_smoke
+  --output-dir ./outputs/prey_live_demo_safe \
+  --variants blau_approx,ours_ebm_cross \
+  --horizon 30 \
+  --bank-size 512 \
+  --hidden-ebm 512 \
+  --hidden-rl 256 \
+  --actor-family categorical \
+  --gamma 1.0 \
+  --ebm-update-every 4 \
+  --spce-L 1024 \
+  --snmc-L 512 \
+  --belief-mode distilled_detached \
+  --belief-feature-mode moments \
+  --selection-start-episode 300 \
+  --selection-every 100 \
+  --selection-eval-episodes 20 \
+  --selection-return-weight 1.0 \
+  --selection-bank-ig-weight 0.0 \
+  --selection-spce-weight 0.0 \
+  --selection-belief-kl-weight 0.0 \
+  --selection-belief-mean-weight 0.0
 ```
 
 Generate scientific plots from an experiment output directory:
