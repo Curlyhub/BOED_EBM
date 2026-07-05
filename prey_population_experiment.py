@@ -158,7 +158,7 @@ class PreyPopulationEnv(GenericBankBOEDEnv):
         pT = ((N0 - NT) / N0).clamp(1e-6, 1.0 - 1e-6)
         return self._binom_consumed_loglik(obs_t.expand_as(pT), N0, pT)
 
-
+#that lines was update
 VARIANTS = ["blau_approx", "ours_ebm_control", "ours_ebm_cross"]
 
 
