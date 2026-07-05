@@ -11,7 +11,7 @@ The package is organized around reusable environment and trainer abstractions in
 - SAC-style policy-gradient trainer for continuous and discrete benchmarks.
 - NES/OpenAI-ES trainer for direct policy parameter search.
 - EBM belief features with exact, distilled, end-to-end, and learned-only modes.
-- Source-location and prey-population benchmark experiments.
+- Source-location,prey-population and Hill/log-logistic dose-response model benchmark experiments.
 - Optional homeostatic action filter for movement, risk, budget, and population-viability constraints.
 - Multi-seed result summaries and publication-oriented plots.
 
@@ -117,6 +117,28 @@ boedx-prey-population \
   --selection-belief-kl-weight 0.0 \
   --selection-belief-mean-weight 0.0
 ```
+
+Run a small Hill/log-logistic dose-response experiment:
+
+```bash
+boedx-dose-response \
+  --episodes 800 \
+  --eval-episodes 60 \
+  --seeds 0 \
+  --output-dir ./outputs/dose_response_live \
+  --variants blau_approx,control_posterior_exact,ours_ebm_cross_posterior \
+  --horizon 20 \
+  --bank-size 512 \
+  --hidden-ebm 256 \
+  --hidden-rl 256 \
+  --actor-family mog \
+  --actor-mixture-components 4 \
+  --gamma 0.95 \
+  --spce-L 256 \
+  --snmc-L 0 \
+  --belief-mode distilled_detached \
+  --belief-feature-mode moments
+  ```
 
 Generate scientific plots from an experiment output directory:
 
