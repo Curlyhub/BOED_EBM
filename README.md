@@ -11,6 +11,7 @@ The package is organized around reusable environment and trainer abstractions in
 - SAC-style policy-gradient trainer for continuous and discrete benchmarks.
 - NES/OpenAI-ES trainer for direct policy parameter search.
 - EBM belief features with exact, distilled, end-to-end, and learned-only modes.
+- Mixture-of-Experts EBM changed-measure variant over finite hypothesis banks.
 - Source-location,prey-population and Hill/log-logistic dose-response model benchmark experiments.
 - Optional homeostatic action filter for movement, risk, budget, and population-viability constraints.
 - Multi-seed result summaries and publication-oriented plots.
@@ -32,8 +33,10 @@ boedx/
     prey_population.py       Prey-population benchmark
 tests/
   test_homeostatic_filter.py Homeostatic filter regression and smoke tests
+  test_moe_ebm.py            MoE changed-measure EBM tests
 docs/
   architecture.md            Internal architecture and data flow
+  moe_ebm.md                 Mixture changed-measure EBM reference
   experiments.md             CLI usage and experiment recipes
   homeostatic_filter.md      Homeostatic filtering reference
   development.md             Testing and extension notes
@@ -168,6 +171,7 @@ The trainers compare baseline and EBM-enhanced design policies. Common variant n
 - `control_posterior_exact`: exact posterior-control ablation.
 - `ours_ebm_control`: EBM belief used for control-side features.
 - `ours_ebm_cross`: EBM cross-interaction variant.
+- `ours_ebm_moe_posterior`, `ours_ebm_moe_control`, `ours_ebm_moe_cross`, and `ours_ebm_moe_measure`: Mixture-of-Experts EBM variants. The default `measure_mixture` mode forms a true mixture of EBM-induced changed measures over the finite bank; `energy_blend` is available only as an ablation.
 - `ours_ebm_control_beta_contrastive` and `ours_ebm_cross_beta_contrastive`: beta-contrastive schedules.
 
 Available defaults vary by experiment. Pass `--variants name1,name2` to run a subset.
@@ -200,6 +204,7 @@ See `docs/homeostatic_filter.md` for the full behavior and diagnostic fields.
 ## Documentation
 
 - `docs/architecture.md`: package architecture, state flow, environment interface, and trainer responsibilities.
+- `docs/moe_ebm.md`: Mixture-of-Experts EBM changed-measure formulation and CLI options.
 - `docs/experiments.md`: CLI recipes, output layout, plotting, and common options.
 - `docs/homeostatic_filter.md`: detailed homeostatic action filtering reference.
 - `docs/development.md`: testing, warning policy, and how to add new environments or variants.
