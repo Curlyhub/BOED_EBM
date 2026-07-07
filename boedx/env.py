@@ -161,6 +161,14 @@ class BeliefConfig:
     beta_end: float = 0.05
     beta_power: float = 1.5
 
+    # Mixture-of-measures EBM variants.
+    ebm_moe_enabled: bool = False
+    ebm_moe_experts: str = "identity,standard,cross"
+    ebm_moe_router_hidden: int = 128
+    ebm_moe_router_temp: float = 1.0
+    ebm_moe_entropy_reg: float = 0.0
+    ebm_moe_mode: str = "measure_mixture"
+
 
 # ---------------------------------------------------------------------------
 # Abstract environment

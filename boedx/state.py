@@ -13,6 +13,7 @@ The key abstraction is the *variant*:
 +---------------------------------------+----------------------------------------------+
 | ``ours_ebm_control_posterior``        | Quotient + EBM belief (posterior-backed)     |
 | ``ours_ebm_cross_posterior``          | Quotient + EBM belief (cross, posterior)     |
+| ``ours_ebm_moe_posterior``            | Quotient + MoE changed-measure EBM belief    |
 | ``ours_ebm_control_beta_contrastive`` | Quotient + EBM belief (beta-contrastive)     |
 | ``ours_ebm_cross_beta_contrastive``   | Quotient + EBM belief (cross, beta-ctr.)     |
 +---------------------------------------+----------------------------------------------+
@@ -70,6 +71,10 @@ def variant_uses_ebm(variant: str) -> bool:
         "ours_ebm_control_posterior",
         "ours_ebm_cross_filter",
         "ours_ebm_cross_posterior",
+        "ours_ebm_moe_control",
+        "ours_ebm_moe_cross",
+        "ours_ebm_moe_measure",
+        "ours_ebm_moe_posterior",
         "ours_ebm_control_beta_contrastive",
         "ours_ebm_cross_beta_contrastive",
     }
@@ -81,6 +86,16 @@ def variant_uses_cross_ebm(variant: str) -> bool:
         "ours_ebm_cross_filter",
         "ours_ebm_cross_posterior",
         "ours_ebm_cross_beta_contrastive",
+        "ours_ebm_moe_cross",
+    }
+
+
+def variant_uses_moe_ebm(variant: str) -> bool:
+    return variant in {
+        "ours_ebm_moe_control",
+        "ours_ebm_moe_cross",
+        "ours_ebm_moe_measure",
+        "ours_ebm_moe_posterior",
     }
 
 
@@ -339,7 +354,7 @@ def history_logits_from_batch(
         return batch[f"{prefix}posterior_logits"]
     if variant == "control_filter_exact" or variant.endswith("_filter"):
         return batch[f"{prefix}filter_logits"]
-    if variant in {"ours_ebm_control", "ours_ebm_cross"}:
+    if variant in {"ours_ebm_control", "ours_ebm_cross", "ours_ebm_moe_control", "ours_ebm_moe_cross", "ours_ebm_moe_measure"}:
         return batch[f"{prefix}filter_logits"]
     raise ValueError(f"Unknown variant for history selection: {variant!r}")
 
@@ -434,6 +449,9 @@ def compute_state_from_batch(
         energy, A, _ = energy_net.forward_beta(
             hist_feat, contrastive_feat, env.hypothesis_bank, beta
         )
+    elif variant_uses_moe_ebm(variant):
+        energy = energy_net(hist_feat, env.hypothesis_bank, selected_logits)
+        A = apsi_head(hist_feat)
     else:
         energy = energy_net(hist_feat, env.hypothesis_bank)
         A = apsi_head(hist_feat)

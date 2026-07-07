@@ -310,6 +310,13 @@ def parse_args() -> argparse.Namespace:
                    choices=["exact", "distilled_detached", "distilled_e2e", "learned_only"])
     p.add_argument("--belief-feature-mode",  type=str,   default="moments",
                    choices=["legacy", "moments"])
+    p.add_argument("--ebm-moe-enabled",      action="store_true")
+    p.add_argument("--ebm-moe-experts",      type=str,   default="identity,standard,cross")
+    p.add_argument("--ebm-moe-router-hidden", type=int,  default=128)
+    p.add_argument("--ebm-moe-router-temp",  type=float, default=1.0)
+    p.add_argument("--ebm-moe-entropy-reg",  type=float, default=0.0)
+    p.add_argument("--ebm-moe-mode",         type=str,   default="measure_mixture",
+                   choices=["measure_mixture", "energy_blend"])
     p.add_argument("--selection-start-episode", type=int, default=0)
     p.add_argument("--selection-every", type=int, default=0)
     p.add_argument("--selection-eval-episodes", type=int, default=0)
@@ -386,6 +393,12 @@ def main() -> None:
     belief_cfg = BeliefConfig(
         mode=args.belief_mode,
         feature_mode=args.belief_feature_mode,
+        ebm_moe_enabled=args.ebm_moe_enabled or any(v.startswith("ours_ebm_moe") for v in variants),
+        ebm_moe_experts=args.ebm_moe_experts,
+        ebm_moe_router_hidden=args.ebm_moe_router_hidden,
+        ebm_moe_router_temp=args.ebm_moe_router_temp,
+        ebm_moe_entropy_reg=args.ebm_moe_entropy_reg,
+        ebm_moe_mode=args.ebm_moe_mode,
     )
 
     homeostatic_cfg = HomeostaticConfig(

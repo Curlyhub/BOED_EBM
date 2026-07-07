@@ -64,6 +64,7 @@ from boedx.models import (
     DiscreteCategoricalActor,
     DualBranchMixtureTanhGaussianActor,
     EnergyNet,
+    MoEChangeOfMeasureEnergyNet,
     MixtureTanhGaussianActor,
     QCritic,
     SequenceTransformerTanhGaussianActor,
@@ -84,6 +85,7 @@ from boedx.state import (
     posterior_probs_from_energy,
     variant_uses_cross_ebm,
     variant_uses_ebm,
+    variant_uses_moe_ebm,
 )
 from boedx.trainer import (
     discrete_bank_ig_from_logits,
@@ -391,7 +393,10 @@ def compute_state_from_batch_nes(
     if energy_net is None or apsi_head is None or belief_cfg.mode == "exact":
         return append_homeo_features(quotient_base, homeo_features), hist_feat, None, None
 
-    energy = energy_net(hist_feat, env.hypothesis_bank)
+    if variant_uses_moe_ebm(variant):
+        energy = energy_net(hist_feat, env.hypothesis_bank, selected_logits)
+    else:
+        energy = energy_net(hist_feat, env.hypothesis_bank)
     A = apsi_head(hist_feat)
     probs = posterior_probs_from_energy(energy)
     actor_feature_mode, actor_modal_top_k = nes_actor_belief_spec(variant, belief_cfg)
@@ -524,7 +529,20 @@ def _build_policy_modules(
 
     if variant_uses_ebm(variant) and belief_cfg.mode != "exact":
         use_cross = variant_uses_cross_ebm(variant)
-        if belief_cfg.ebm_architecture == "geometric":
+        if variant_uses_moe_ebm(variant):
+            energy_net = MoEChangeOfMeasureEnergyNet(
+                hist_dim=hist_dim,
+                theta_dim=env.theta_dim,
+                hidden=train_cfg.hidden_ebm,
+                experts=[e.strip() for e in belief_cfg.ebm_moe_experts.split(",")],
+                router_hidden=belief_cfg.ebm_moe_router_hidden,
+                router_temp=belief_cfg.ebm_moe_router_temp,
+                mode=belief_cfg.ebm_moe_mode,
+                ebm_architecture=belief_cfg.ebm_architecture,
+                n_sources=belief_cfg.n_sources,
+                add_pairwise_dist=belief_cfg.add_pairwise_dist,
+            ).to(device)
+        elif belief_cfg.ebm_architecture == "geometric":
             source_dim = belief_cfg.source_dim or (env.theta_dim // max(belief_cfg.n_sources, 1))
             if belief_cfg.n_sources * source_dim != env.theta_dim:
                 raise ValueError(
@@ -956,11 +974,19 @@ def _supervised_update_ebm(
         batch = _batch_from_raw_states([raw_list[i] for i in idx], device=device)
         selected_logits = history_logits_from_batch(variant, batch, "")
         hist_feat = filter_backbone.forward_from_logits(selected_logits)
-        energy = energy_net(hist_feat, env.hypothesis_bank)
+        if variant_uses_moe_ebm(variant):
+            energy = energy_net(hist_feat, env.hypothesis_bank, selected_logits)
+        else:
+            energy = energy_net(hist_feat, env.hypothesis_bank)
         A = apsi_head(hist_feat)
         log_probs = F.log_softmax(-energy, dim=-1)
         target_probs = batch["posterior"]
         loss = -(target_probs * log_probs).sum(dim=-1).mean() + 0.1 * A.pow(2).mean()
+        if variant_uses_moe_ebm(variant) and belief_cfg.ebm_moe_entropy_reg != 0.0:
+            alpha = getattr(energy_net, "last_diagnostics", {}).get("alpha")
+            if alpha is not None:
+                ent = -(alpha * torch.log(alpha.clamp_min(1e-12))).sum(dim=-1).mean()
+                loss = loss - belief_cfg.ebm_moe_entropy_reg * ent
         optim.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(
@@ -1862,6 +1888,12 @@ def run_experiment_suite_nes(
             "add_pairwise_dist": belief_cfg.add_pairwise_dist,
             "modal_top_k": belief_cfg.modal_top_k,
             "include_raw_history_for_ebm_actor": belief_cfg.include_raw_history_for_ebm_actor,
+            "ebm_moe_enabled": belief_cfg.ebm_moe_enabled,
+            "ebm_moe_experts": belief_cfg.ebm_moe_experts,
+            "ebm_moe_router_hidden": belief_cfg.ebm_moe_router_hidden,
+            "ebm_moe_router_temp": belief_cfg.ebm_moe_router_temp,
+            "ebm_moe_entropy_reg": belief_cfg.ebm_moe_entropy_reg,
+            "ebm_moe_mode": belief_cfg.ebm_moe_mode,
         }
     if homeostatic_cfg is not None:
         summary["homeostatic_config"] = config_to_dict(homeostatic_cfg)

@@ -42,6 +42,7 @@ from boedx.models import (
     DiscreteCategoricalActor,
     DiscreteMoECategoricalActor,
     EnergyNet,
+    MoEChangeOfMeasureEnergyNet,
     MixtureTanhGaussianActor,
     QCritic,
     SymmetricSourceCrossNet,
@@ -60,6 +61,7 @@ from boedx.state import (
     variant_uses_beta_contrastive,
     variant_uses_cross_ebm,
     variant_uses_ebm,
+    variant_uses_moe_ebm,
 )
 from boedx.utils import (
     ensure_dir,
@@ -162,6 +164,7 @@ def _evaluate_policy_bundle(
     belief_l1_errs: List[float] = []
     belief_map_exact_errs: List[float] = []
     belief_map_true_errs: List[float] = []
+    moe_alphas: List[np.ndarray] = []
     bank_ig_finals: List[float] = []
     filter_bank_ig_finals: List[float] = []
     spce_lower_finals: List[float] = []
@@ -200,6 +203,10 @@ def _evaluate_policy_bundle(
                 belief_cfg=belief_cfg,
             )
             if energy_net is not None and energy_t is not None and A_t is not None:
+                if variant_uses_moe_ebm(variant):
+                    alpha = getattr(energy_net, "last_diagnostics", {}).get("alpha")
+                    if alpha is not None:
+                        moe_alphas.append(alpha.detach().cpu().numpy())
                 exact_probs_t = torch.tensor(raw["posterior"][None], dtype=torch.float32, device=device)
                 pred_probs = posterior_probs_from_energy(energy_t)
                 exact_mean_t = exact_probs_t @ env.hypothesis_bank
@@ -292,6 +299,12 @@ def _evaluate_policy_bundle(
             "avg_belief_map_to_exact_distance": float(np.mean(belief_map_exact_errs)),
             "avg_belief_map_to_true_distance": float(np.mean(belief_map_true_errs)),
         })
+    if moe_alphas:
+        alpha_mean = np.concatenate(moe_alphas, axis=0).mean(axis=0)
+        names = list(getattr(energy_net, "expert_names", [str(i) for i in range(len(alpha_mean))]))
+        eval_metrics["ebm_moe_alpha_mean"] = {
+            name: float(val) for name, val in zip(names, alpha_mean)
+        }
 
     paths = {
         "bank_ig_mean_path": np.mean(np.array(bank_ig_paths, dtype=np.float64), axis=0).tolist(),
@@ -409,6 +422,20 @@ def build_modules(
                 add_pairwise_dist=belief_cfg.add_pairwise_dist,
             ).to(device)
             apsi_head = nn.Identity().to(device)
+        elif variant_uses_moe_ebm(variant):
+            energy_net = MoEChangeOfMeasureEnergyNet(
+                hist_dim=hist_dim,
+                theta_dim=env.theta_dim,
+                hidden=train_cfg.hidden_ebm,
+                experts=[e.strip() for e in belief_cfg.ebm_moe_experts.split(",")],
+                router_hidden=belief_cfg.ebm_moe_router_hidden,
+                router_temp=belief_cfg.ebm_moe_router_temp,
+                mode=belief_cfg.ebm_moe_mode,
+                ebm_architecture=belief_cfg.ebm_architecture,
+                n_sources=belief_cfg.n_sources,
+                add_pairwise_dist=belief_cfg.add_pairwise_dist,
+            ).to(device)
+            apsi_head = ApsiHead(hist_dim=hist_dim, hidden=train_cfg.hidden_ebm).to(device)
         else:
             if belief_cfg.ebm_architecture == "geometric":
                 source_dim = belief_cfg.source_dim or (env.theta_dim // max(belief_cfg.n_sources, 1))
@@ -442,6 +469,10 @@ def build_modules(
         "ours_ebm_control_posterior",
         "ours_ebm_cross_filter",
         "ours_ebm_cross_posterior",
+        "ours_ebm_moe_control",
+        "ours_ebm_moe_cross",
+        "ours_ebm_moe_measure",
+        "ours_ebm_moe_posterior",
         "ours_ebm_control_beta_contrastive",
         "ours_ebm_cross_beta_contrastive",
     }:
@@ -818,6 +849,15 @@ def train_one_seed(
                                 -(target_probs * log_probs).sum(dim=-1).mean()
                                 + train_cfg.apsi_coef * A.pow(2).mean()
                             )
+                            if (
+                                variant_uses_moe_ebm(variant)
+                                and belief_cfg is not None
+                                and belief_cfg.ebm_moe_entropy_reg != 0.0
+                            ):
+                                alpha = getattr(energy_net, "last_diagnostics", {}).get("alpha")
+                                if alpha is not None:
+                                    ent = -(alpha * torch.log(alpha.clamp_min(1e-12))).sum(dim=-1).mean()
+                                    ebm_loss = ebm_loss - belief_cfg.ebm_moe_entropy_reg * ent
                             ebm_optim.zero_grad()
                             ebm_loss.backward()
                             nn.utils.clip_grad_norm_(
@@ -1138,6 +1178,12 @@ def run_experiment_suite(
             "beta_start": belief_cfg.beta_start,
             "beta_end": belief_cfg.beta_end,
             "beta_power": belief_cfg.beta_power,
+            "ebm_moe_enabled": belief_cfg.ebm_moe_enabled,
+            "ebm_moe_experts": belief_cfg.ebm_moe_experts,
+            "ebm_moe_router_hidden": belief_cfg.ebm_moe_router_hidden,
+            "ebm_moe_router_temp": belief_cfg.ebm_moe_router_temp,
+            "ebm_moe_entropy_reg": belief_cfg.ebm_moe_entropy_reg,
+            "ebm_moe_mode": belief_cfg.ebm_moe_mode,
         }
     if homeostatic_cfg is not None:
         summary["homeostatic_config"] = config_to_dict(homeostatic_cfg)

@@ -239,6 +239,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--add-pairwise-dist", action="store_true", default=True,
                    help="Append pairwise source distances to Deep Sets EBM features.")
     p.add_argument("--no-pairwise-dist", dest="add_pairwise_dist", action="store_false")
+    p.add_argument("--ebm-moe-enabled", action="store_true")
+    p.add_argument("--ebm-moe-experts", type=str, default="identity,standard,cross")
+    p.add_argument("--ebm-moe-router-hidden", type=int, default=128)
+    p.add_argument("--ebm-moe-router-temp", type=float, default=1.0)
+    p.add_argument("--ebm-moe-entropy-reg", type=float, default=0.0)
+    p.add_argument("--ebm-moe-mode", type=str, default="measure_mixture",
+                   choices=["measure_mixture", "energy_blend"])
 
     # ── Evaluation ────────────────────────────────────────────────────────────
     p.add_argument("--spce-L", type=int, default=1024,
@@ -394,6 +401,14 @@ def main() -> None:
         nes_actor_feature_mode=args.nes_actor_feature_mode,
         nes_actor_modal_top_k=args.nes_actor_modal_top_k,
         nes_cross_compact_belief=args.nes_cross_compact_belief,
+        ebm_moe_enabled=args.ebm_moe_enabled or any(
+            v.strip().startswith("ours_ebm_moe") for v in args.variants.split(",")
+        ),
+        ebm_moe_experts=args.ebm_moe_experts,
+        ebm_moe_router_hidden=args.ebm_moe_router_hidden,
+        ebm_moe_router_temp=args.ebm_moe_router_temp,
+        ebm_moe_entropy_reg=args.ebm_moe_entropy_reg,
+        ebm_moe_mode=args.ebm_moe_mode,
         # Automatically enable raw history when a Transformer actor is in use.
         include_raw_history_for_ebm_actor=(
             args.ebm_actor_family == "transformer"

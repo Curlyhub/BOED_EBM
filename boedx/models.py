@@ -20,7 +20,7 @@ Layer 5 – Q-critics (QCritic)
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -485,6 +485,117 @@ class BetaContrastiveEnergyNet(nn.Module):
             "contrastive_hist": ctr_hist,
         }
         return energy, A, extras
+
+
+class MoEChangeOfMeasureEnergyNet(nn.Module):
+    """Mixture of EBM-induced changed measures over a finite bank."""
+
+    def __init__(
+        self,
+        hist_dim: int,
+        theta_dim: int,
+        hidden: int = 128,
+        experts: Sequence[str] = ("identity", "standard", "cross"),
+        router_hidden: int = 128,
+        router_temp: float = 1.0,
+        mode: str = "measure_mixture",
+        ebm_architecture: str = "standard",
+        n_sources: int = 1,
+        add_pairwise_dist: bool = True,
+    ):
+        super().__init__()
+        if mode not in {"measure_mixture", "energy_blend"}:
+            raise ValueError(f"Unknown MoE EBM mode: {mode!r}")
+        self.expert_names = tuple(e.strip() for e in experts if e.strip())
+        if not self.expert_names:
+            raise ValueError("MoE EBM requires at least one expert.")
+        allowed = {"identity", "standard", "cross"}
+        unknown = set(self.expert_names) - allowed
+        if unknown:
+            raise ValueError(f"Unknown MoE EBM experts: {sorted(unknown)}")
+        self.router_temp = max(float(router_temp), 1e-6)
+        self.mode = mode
+        self.experts = nn.ModuleDict()
+
+        if ebm_architecture == "geometric":
+            std_cls = SymmetricSourceEnergyNet
+            cross_cls = SymmetricSourceCrossNet
+            kwargs: dict = dict(
+                hist_dim=hist_dim,
+                theta_dim=theta_dim,
+                hidden=hidden,
+                n_sources=n_sources,
+                add_pairwise_dist=add_pairwise_dist,
+            )
+        else:
+            std_cls = EnergyNet
+            cross_cls = CrossInteractionEnergyNet
+            kwargs = dict(hist_dim=hist_dim, theta_dim=theta_dim, hidden=hidden)
+
+        for name in self.expert_names:
+            if name == "standard":
+                self.experts[name] = std_cls(**kwargs)
+            elif name == "cross":
+                self.experts[name] = cross_cls(**kwargs)
+
+        self.router = nn.Sequential(
+            nn.Linear(hist_dim, router_hidden), nn.ReLU(),
+            nn.Linear(router_hidden, len(self.expert_names)),
+        )
+        self.last_diagnostics: Dict[str, torch.Tensor] = {}
+
+    def expert_energies(self, hist_feat: torch.Tensor, theta_bank: torch.Tensor) -> torch.Tensor:
+        B, H = hist_feat.shape[0], theta_bank.shape[0]
+        pieces = []
+        for name in self.expert_names:
+            if name == "identity":
+                pieces.append(torch.zeros(B, H, dtype=hist_feat.dtype, device=hist_feat.device))
+            else:
+                pieces.append(self.experts[name](hist_feat, theta_bank))
+        return sanitize(torch.stack(pieces, dim=1), 50.0)
+
+    def forward_log_weights(
+        self,
+        hist_feat: torch.Tensor,
+        theta_bank: torch.Tensor,
+        base_logits: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        base_log_w = F.log_softmax(base_logits, dim=-1)
+        energies = self.expert_energies(hist_feat, theta_bank)
+        router_logits = sanitize(self.router(hist_feat), 50.0) / self.router_temp
+        log_alpha = F.log_softmax(router_logits, dim=-1)
+
+        if self.mode == "energy_blend":
+            energy = (torch.exp(log_alpha).unsqueeze(-1) * energies).sum(dim=1)
+            log_q = F.log_softmax(base_log_w - energy, dim=-1)
+            expert_log_q = F.log_softmax(base_log_w.unsqueeze(1) - energies, dim=-1)
+        else:
+            expert_tilt = base_log_w.unsqueeze(1) - energies
+            expert_log_q = expert_tilt - torch.logsumexp(expert_tilt, dim=-1, keepdim=True)
+            log_q = torch.logsumexp(log_alpha.unsqueeze(-1) + expert_log_q, dim=1)
+            log_q = log_q - torch.logsumexp(log_q, dim=-1, keepdim=True)
+        log_q = torch.nan_to_num(log_q, nan=-math.log(log_q.shape[-1]), posinf=0.0, neginf=-1e30)
+        log_q = log_q - torch.logsumexp(log_q, dim=-1, keepdim=True)
+
+        diag = {
+            "alpha": torch.exp(log_alpha),
+            "log_alpha": log_alpha,
+            "expert_log_q": expert_log_q,
+            "expert_energies": energies,
+        }
+        self.last_diagnostics = {k: v.detach() for k, v in diag.items()}
+        return log_q, diag
+
+    def forward(
+        self,
+        hist_feat: torch.Tensor,
+        theta_bank: torch.Tensor,
+        base_logits: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        if base_logits is None:
+            base_logits = torch.log(hist_feat.clamp_min(1e-12))
+        log_q, _ = self.forward_log_weights(hist_feat, theta_bank, base_logits)
+        return torch.nan_to_num(-log_q, nan=0.0, posinf=50.0, neginf=-50.0)
 
 
 # ---------------------------------------------------------------------------
